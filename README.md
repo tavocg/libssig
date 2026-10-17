@@ -37,3 +37,11 @@ cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
 cmake --build build-release
 cmake --install build-release --prefix "$HOME/.local"
 ```
+
+## License
+
+Copyright (C) 2026 Gustavo Calvo <tavo@tavo.cr>.
+
+Licensed under the GNU General Public License, version 3 or any later version
+(SPDX: `GPL-3.0-or-later`). See [LICENSE](LICENSE) for the full terms.
+This software is provided without any warranty.

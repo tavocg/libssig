@@ -1,3 +1,12 @@
+/*
+ * This file is part of libssig.
+ * Copyright (C) 2026 Gustavo Calvo <tavo@tavo.cr>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ *
+ * See libssig/libssig.c for the full copyright and warranty notice.
+ * See LICENSE in the project root for the GNU General Public License.
+ */
+
 int main(void) {
 	return 0;
 }
