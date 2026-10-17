@@ -1,0 +1,21 @@
+---
+BasedOnStyle: LLVM
+
+TabWidth: 8
+IndentWidth: 8
+UseTab: Always
+ColumnLimit: 80
+AlignAfterOpenBracket: BlockIndent
+ContinuationIndentWidth: 8
+BreakAfterReturnType: None
+PenaltyReturnTypeOnItsOwnLine: 1000000
+BinPackParameters: false
+AllowAllParametersOfDeclarationOnNextLine: false
+BinPackArguments: false
+AllowAllArgumentsOnNextLine: false
+AllowShortFunctionsOnASingleLine: None
+InsertBraces: true
+
+---
+Language: Json
+DisableFormat: true
