@@ -15,6 +15,9 @@ BinPackArguments: false
 AllowAllArgumentsOnNextLine: false
 AllowShortFunctionsOnASingleLine: None
 InsertBraces: true
+AlignConsecutiveDeclarations: Consecutive
+PointerAlignment: Left
+DerivePointerAlignment: false
 
 ---
 Language: Json
