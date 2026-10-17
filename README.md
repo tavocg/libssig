@@ -2,6 +2,11 @@
 
 Simple digital signature library.
 
+## Bindings
+
+- Python: [tavocg/pyssig](https://github.com/tavocg/pyssig)
+- Go: [tavocg/go-ssig](https://github.com/tavocg/go-ssig)
+
 ## Usage
 
 - `libssig_version`
@@ -32,8 +37,3 @@ cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
 cmake --build build-release
 cmake --install build-release --prefix "$HOME/.local"
 ```
-
-## Bindings
-
-- [Go](doc/bindings/go.md)
-- [Python](doc/bindings/python.md)
