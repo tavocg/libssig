@@ -76,11 +76,11 @@ varios campos. Su uso:
 
 ```sh
 sign FILE...
-     [-c CONFIG] [-T TYPE]
+     [-c CONFIG] [-T TYPE] [-o FILE]
      -p PROFILE
 
 sign FILE...
-     [-c CONFIG] [-T TYPE]
+     [-c CONFIG] [-T TYPE] [-o FILE]
      [-t URI] [-P PIN] [-k ID]
      [-a ALGORITHM] [-H HASH]
      [-f FORMAT] [-l LEVEL]
