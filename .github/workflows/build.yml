@@ -7,10 +7,21 @@ permissions:
 
 jobs:
   build:
+    name: Build and Test
     runs-on: ubuntu-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: cachix/install-nix-action@v31
-      - run: nix develop --command cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-      - run: nix develop --command cmake --build build --parallel
-      - run: nix develop --command ctest --test-dir build --output-on-failure
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+
+      - name: Configure
+        run: nix develop --command cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: nix develop --command cmake --build build --parallel
+
+      - name: Test
+        run: nix develop --command ctest --test-dir build --output-on-failure
