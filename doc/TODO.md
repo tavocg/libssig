@@ -79,11 +79,11 @@ sign FILE...
      [-c CONFIG] [-T TYPE]
      -p PROFILE
 
-sign [-c CONFIG] [-T TYPE]
+sign FILE...
+     [-c CONFIG] [-T TYPE]
      [-t URI] [-P PIN] [-k ID]
      [-a ALGORITHM] [-H HASH]
      [-f FORMAT] [-l LEVEL]
-     FILE...
 ```
 
 `-p profile` permitiría seleccionar un perfil de la config.
