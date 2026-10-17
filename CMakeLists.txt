@@ -12,9 +12,8 @@ include(CMakePackageConfigHelpers)
 include(CTest)
 
 find_package(PkgConfig REQUIRED)
-
+find_package(OpenSSL REQUIRED COMPONENTS Crypto)
 pkg_check_modules(P11_KIT REQUIRED IMPORTED_TARGET p11-kit-1)
-pkg_check_modules(PCSC REQUIRED IMPORTED_TARGET libpcsclite)
 
 file(GLOB_RECURSE LIBSSIG_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/libssig/*.c"
@@ -26,7 +25,7 @@ add_library(libssig::ssig ALIAS ssig)
 
 target_link_libraries(ssig PRIVATE
     PkgConfig::P11_KIT
-    PkgConfig::PCSC
+    OpenSSL::Crypto
 )
 
 target_include_directories(ssig PUBLIC
