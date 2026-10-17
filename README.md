@@ -4,6 +4,7 @@ Simple digital signature library.
 
 ## Usage
 
+- `libssig_version`
 - `libssig_tokens`
 - `libssig_sign`
 - `libssig_verify`
