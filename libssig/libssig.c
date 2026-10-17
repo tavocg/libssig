@@ -1,6 +1,6 @@
 #include <libssig/libssig.h>
 
-void libssig_version(int *major, int *minor, int *patch) {
+void libssig_version(int* major, int* minor, int* patch) {
 	if (major) {
 		*major = LIBSSIG_VERSION_MAJOR;
 	}
