@@ -107,3 +107,4 @@ Para conseguir esto, se requiere lo siguiente:
       - `-l B-LTA`
       Los argumentos son case insensitive.
       Para conseguir esto, el módulo debe exponer `libssig_sign`.
+- [ ] `libssig_verify`. Con el objetivo de `sign verify FILES...`
