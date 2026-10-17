@@ -31,7 +31,6 @@
 
             buildInputs = with pkgs; [
               p11-kit
-              pcsclite
               openssl
             ];
 
