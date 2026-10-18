@@ -10,6 +10,8 @@
 #ifndef LIBSSIG_H
 #define LIBSSIG_H
 
+#include <stddef.h>
+
 #define LIBSSIG_VERSION_MAJOR 0
 #define LIBSSIG_VERSION_MINOR 1
 #define LIBSSIG_VERSION_PATCH 0
@@ -18,7 +20,13 @@
 extern "C" {
 #endif
 
-void libssig_version(int *major, int *minor, int *patch);
+typedef struct {
+	unsigned char* uri;
+} libssig_token;
+
+void libssig_version(int* major, int* minor, int* patch);
+
+int libssig_tokens(libssig_token** tokens);
 
 #ifdef __cplusplus
 }
