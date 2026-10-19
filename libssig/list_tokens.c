@@ -7,7 +7,7 @@
  * See LICENSE in the project root for the GNU General Public License.
  */
 
-#include <libssig/libssig.h>
+#include <libssig/internal.h>
 #include <p11-kit/p11-kit.h>
 #include <p11-kit/uri.h>
 #include <stdint.h>
@@ -295,23 +295,26 @@ libssig_status libssig_list_tokens(libssig_tokens* result, bool hardware_only) {
 
 	*result = (libssig_tokens){0};
 
-	CK_FUNCTION_LIST** modules = p11_kit_modules_load_and_initialize(0);
+	pkcs11_context context = {0};
+	libssig_status status = pkcs11_context_open(&context);
 
-	if (!modules) {
-		return LIBSSIG_ERROR_MODULES;
+	if (status != LIBSSIG_OK) {
+		return status;
 	}
 
 	libssig_tokens collected = {0};
-	libssig_status status = LIBSSIG_OK;
-
-	for (size_t m = 0; modules[m] != NULL; ++m) {
-		status = collect_module_tokens(modules[m], hardware_only, &collected);
+	for (size_t m = 0; context.modules[m] != NULL; ++m) {
+		status = collect_module_tokens(
+			context.modules[m],
+			hardware_only,
+			&collected
+		);
 		if (status != LIBSSIG_OK) {
 			break;
 		}
 	}
 
-	p11_kit_modules_finalize_and_release(modules);
+	pkcs11_context_close(&context);
 
 	if (status != LIBSSIG_OK) {
 		unsigned long ck_rv = collected.ck_rv;
