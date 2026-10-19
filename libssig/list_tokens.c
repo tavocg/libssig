@@ -207,6 +207,55 @@ static libssig_status collect_token(
 	return status;
 }
 
+static libssig_status collect_slot_token(
+	CK_FUNCTION_LIST* module,
+	CK_SLOT_ID slot,
+	bool hardware_only,
+	libssig_tokens* result
+) {
+	if (!hardware_only) {
+		return collect_token(module, slot, result);
+	}
+
+	CK_BBOOL hardware = CK_FALSE;
+	CK_RV rv = CKR_OK;
+	libssig_status status = slot_is_hardware(module, slot, &hardware, &rv);
+	if (status != LIBSSIG_OK) {
+		result->ck_rv = rv;
+		return status;
+	}
+	if (!hardware) {
+		return LIBSSIG_OK;
+	}
+
+	return collect_token(module, slot, result);
+}
+
+static libssig_status collect_module_tokens(
+	CK_FUNCTION_LIST* module,
+	bool hardware_only,
+	libssig_tokens* result
+) {
+	CK_SLOT_ID* slots = NULL;
+	CK_ULONG count = 0;
+	CK_RV rv = CKR_OK;
+	libssig_status status = get_token_slots(module, &slots, &count, &rv);
+	if (status != LIBSSIG_OK) {
+		result->ck_rv = rv;
+		return status;
+	}
+
+	for (CK_ULONG i = 0; i < count; ++i) {
+		status = collect_slot_token(module, slots[i], hardware_only, result);
+		if (status != LIBSSIG_OK) {
+			break;
+		}
+	}
+
+	free(slots);
+	return status;
+}
+
 void libssig_tokens_free(libssig_tokens* result) {
 	if (!result) {
 		return;
@@ -237,36 +286,7 @@ libssig_status libssig_list_tokens(libssig_tokens* result, bool hardware_only) {
 	libssig_status status = LIBSSIG_OK;
 
 	for (size_t m = 0; modules[m] != NULL; ++m) {
-		CK_SLOT_ID* slots = NULL;
-		CK_ULONG slot_count = 0;
-		CK_RV rv = CKR_OK;
-
-		status = get_token_slots(modules[m], &slots, &slot_count, &rv);
-		if (status != LIBSSIG_OK) {
-			collected.ck_rv = rv;
-			break;
-		}
-
-		for (CK_ULONG i = 0; i < slot_count; ++i) {
-			if (hardware_only) {
-				CK_BBOOL hardware = CK_FALSE;
-				status = slot_is_hardware(modules[m], slots[i], &hardware, &rv);
-				if (status != LIBSSIG_OK) {
-					collected.ck_rv = rv;
-					break;
-				}
-				if (!hardware) {
-					continue;
-				}
-			}
-
-			status = collect_token(modules[m], slots[i], &collected);
-			if (status != LIBSSIG_OK) {
-				break;
-			}
-		}
-
-		free(slots);
+		status = collect_module_tokens(modules[m], hardware_only, &collected);
 		if (status != LIBSSIG_OK) {
 			break;
 		}
