@@ -15,7 +15,7 @@ BinPackArguments: false
 AllowAllArgumentsOnNextLine: false
 AllowShortFunctionsOnASingleLine: None
 InsertBraces: true
-AlignConsecutiveDeclarations: None
+AlignConsecutiveDeclarations: Consecutive
 PointerAlignment: Left
 DerivePointerAlignment: false
 
