@@ -13,5 +13,5 @@ add_test(NAME noop COMMAND noop_test)
 
 # Manual integration check using the locally configured PKCS#11 modules.
 add_executable(list-tokens list-tokens.c)
-target_link_libraries(list-tokens PRIVATE libssig::ssig)
+target_link_libraries(list-tokens PRIVATE libssig::ssig PkgConfig::P11_KIT)
 target_compile_options(list-tokens PRIVATE -Wall -Wextra -Wpedantic -Werror)
