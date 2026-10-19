@@ -9,7 +9,7 @@
 
 int main(void) {
 	libssig_tokens tokens = {0};
-	libssig_status status = libssig_list_tokens(&tokens);
+	libssig_status status = libssig_list_tokens(&tokens, true);
 
 	if (status != LIBSSIG_OK) {
 		fprintf(stderr, "Error: %d, CK_RV: 0x%lx\n", status, tokens.ck_rv);

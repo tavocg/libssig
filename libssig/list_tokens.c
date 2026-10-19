@@ -162,6 +162,23 @@ static libssig_status append_token(
 	return LIBSSIG_OK;
 }
 
+static libssig_status slot_is_hardware(
+	CK_FUNCTION_LIST* module,
+	CK_SLOT_ID slot,
+	CK_BBOOL* out_hardware,
+	CK_RV* out_rv
+) {
+	*out_hardware = CK_FALSE;
+	CK_SLOT_INFO info;
+	*out_rv = module->C_GetSlotInfo(slot, &info);
+	if (*out_rv != CKR_OK) {
+		return LIBSSIG_ERROR_PKCS11;
+	}
+
+	*out_hardware = (info.flags & CKF_HW_SLOT) ? CK_TRUE : CK_FALSE;
+	return LIBSSIG_OK;
+}
+
 static libssig_status collect_token(
 	CK_FUNCTION_LIST* module,
 	CK_SLOT_ID slot,
@@ -203,7 +220,7 @@ void libssig_tokens_free(libssig_tokens* result) {
 	*result = (libssig_tokens){0};
 }
 
-libssig_status libssig_list_tokens(libssig_tokens* result) {
+libssig_status libssig_list_tokens(libssig_tokens* result, bool hardware_only) {
 	if (!result) {
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
@@ -231,6 +248,18 @@ libssig_status libssig_list_tokens(libssig_tokens* result) {
 		}
 
 		for (CK_ULONG i = 0; i < slot_count; ++i) {
+			if (hardware_only) {
+				CK_BBOOL hardware = CK_FALSE;
+				status = slot_is_hardware(modules[m], slots[i], &hardware, &rv);
+				if (status != LIBSSIG_OK) {
+					collected.ck_rv = rv;
+					break;
+				}
+				if (!hardware) {
+					continue;
+				}
+			}
+
 			status = collect_token(modules[m], slots[i], &collected);
 			if (status != LIBSSIG_OK) {
 				break;

@@ -10,6 +10,7 @@
 #ifndef LIBSSIG_H
 #define LIBSSIG_H
 
+#include <stdbool.h>
 #include <stddef.h>
 
 #define LIBSSIG_VERSION_MAJOR 0
@@ -46,7 +47,7 @@ typedef struct {
 
 void libssig_version(int* major, int* minor, int* patch);
 
-libssig_status libssig_list_tokens(libssig_tokens* result);
+libssig_status libssig_list_tokens(libssig_tokens* result, bool hardware_only);
 
 void libssig_tokens_free(libssig_tokens* result);
 
