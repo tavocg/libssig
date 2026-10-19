@@ -78,7 +78,8 @@ static libssig_status select_token(
 		return LIBSSIG_ERROR_MEMORY;
 	}
 	/* Por ahora aceptamos URIs de token; no atributos de objeto ni PIN. */
-	int            rc = p11_kit_uri_parse(text, P11_KIT_URI_FOR_TOKEN, uri);
+	int rc = p11_kit_uri_parse(text, P11_KIT_URI_FOR_TOKEN, uri);
+
 	libssig_status status = LIBSSIG_ERROR_URI;
 	if (rc != P11_KIT_URI_OK || p11_kit_uri_any_unrecognized(uri) ||
 	    p11_kit_uri_get_pin_value(uri) || p11_kit_uri_get_pin_source(uri) ||
