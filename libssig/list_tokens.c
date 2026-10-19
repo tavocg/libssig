@@ -31,9 +31,9 @@ static libssig_status allocate_slots(CK_ULONG count, CK_SLOT_ID** out_slots) {
 
 static libssig_status read_token_slots(
 	CK_FUNCTION_LIST* module,
-	CK_SLOT_ID* slots,
-	CK_ULONG* count,
-	CK_RV* out_rv
+	CK_SLOT_ID*		  slots,
+	CK_ULONG*		  count,
+	CK_RV*			  out_rv
 ) {
 	*out_rv = module->C_GetSlotList(CK_TRUE, slots, count);
 	return *out_rv == CKR_OK ? LIBSSIG_OK : LIBSSIG_ERROR_PKCS11;
@@ -41,15 +41,15 @@ static libssig_status read_token_slots(
 
 static libssig_status get_token_slots(
 	CK_FUNCTION_LIST* module,
-	CK_SLOT_ID** out_slots,
-	CK_ULONG* out_count,
-	CK_RV* out_rv
+	CK_SLOT_ID**	  out_slots,
+	CK_ULONG*		  out_count,
+	CK_RV*			  out_rv
 ) {
 	*out_slots = NULL;
 	*out_count = 0;
 	*out_rv = CKR_OK;
 
-	CK_ULONG count = 0;
+	CK_ULONG	   count = 0;
 	libssig_status status = read_token_slots(module, NULL, &count, out_rv);
 	if (status != LIBSSIG_OK || count == 0) {
 		return status;
@@ -98,7 +98,7 @@ static void token_free(libssig_token* token) {
 
 static libssig_status create_token_uri(
 	const CK_TOKEN_INFO* info,
-	char** out_uri
+	char**				 out_uri
 ) {
 	*out_uri = NULL;
 	P11KitUri* uri = p11_kit_uri_new();
@@ -118,7 +118,7 @@ static libssig_status create_token_uri(
 
 static libssig_status token_from_info(
 	const CK_TOKEN_INFO* info,
-	libssig_token* token
+	libssig_token*		 token
 ) {
 	*token = (libssig_token){0};
 	token->label = copy_token_text(info->label, sizeof(info->label));
@@ -163,7 +163,7 @@ static libssig_status token_from_info(
 
 static libssig_status append_token(
 	libssig_tokens* result,
-	libssig_token* token
+	libssig_token*	token
 ) {
 	if (result->count >= SIZE_MAX / sizeof(*result->items)) {
 		return LIBSSIG_ERROR_MEMORY;
@@ -183,9 +183,9 @@ static libssig_status append_token(
 
 static libssig_status slot_is_hardware(
 	CK_FUNCTION_LIST* module,
-	CK_SLOT_ID slot,
-	CK_BBOOL* out_hardware,
-	CK_RV* out_rv
+	CK_SLOT_ID		  slot,
+	CK_BBOOL*		  out_hardware,
+	CK_RV*			  out_rv
 ) {
 	*out_hardware = CK_FALSE;
 	CK_SLOT_INFO info;
@@ -200,11 +200,11 @@ static libssig_status slot_is_hardware(
 
 static libssig_status collect_token(
 	CK_FUNCTION_LIST* module,
-	CK_SLOT_ID slot,
-	libssig_tokens* result
+	CK_SLOT_ID		  slot,
+	libssig_tokens*	  result
 ) {
 	CK_TOKEN_INFO info;
-	CK_RV rv = module->C_GetTokenInfo(slot, &info);
+	CK_RV		  rv = module->C_GetTokenInfo(slot, &info);
 
 	if (rv == CKR_TOKEN_NOT_PRESENT) {
 		return LIBSSIG_OK;
@@ -215,7 +215,7 @@ static libssig_status collect_token(
 		return LIBSSIG_ERROR_PKCS11;
 	}
 
-	libssig_token token = {0};
+	libssig_token  token = {0};
 	libssig_status status = token_from_info(&info, &token);
 	if (status != LIBSSIG_OK) {
 		return status;
@@ -228,16 +228,16 @@ static libssig_status collect_token(
 
 static libssig_status collect_slot_token(
 	CK_FUNCTION_LIST* module,
-	CK_SLOT_ID slot,
-	bool hardware_only,
-	libssig_tokens* result
+	CK_SLOT_ID		  slot,
+	bool			  hardware_only,
+	libssig_tokens*	  result
 ) {
 	if (!hardware_only) {
 		return collect_token(module, slot, result);
 	}
 
-	CK_BBOOL hardware = CK_FALSE;
-	CK_RV rv = CKR_OK;
+	CK_BBOOL	   hardware = CK_FALSE;
+	CK_RV		   rv = CKR_OK;
 	libssig_status status = slot_is_hardware(module, slot, &hardware, &rv);
 	if (status != LIBSSIG_OK) {
 		result->ck_rv = rv;
@@ -252,12 +252,12 @@ static libssig_status collect_slot_token(
 
 static libssig_status collect_module_tokens(
 	CK_FUNCTION_LIST* module,
-	bool hardware_only,
-	libssig_tokens* result
+	bool			  hardware_only,
+	libssig_tokens*	  result
 ) {
-	CK_SLOT_ID* slots = NULL;
-	CK_ULONG count = 0;
-	CK_RV rv = CKR_OK;
+	CK_SLOT_ID*	   slots = NULL;
+	CK_ULONG	   count = 0;
+	CK_RV		   rv = CKR_OK;
 	libssig_status status = get_token_slots(module, &slots, &count, &rv);
 	if (status != LIBSSIG_OK) {
 		result->ck_rv = rv;

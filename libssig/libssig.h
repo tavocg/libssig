@@ -61,12 +61,12 @@ typedef struct {
 	/* Sesiones de lectura/escritura; ~0UL si no se conoce la cantidad. */
 	unsigned long rw_session_count;
 
-	unsigned long max_pin_len;
-	unsigned long min_pin_len;
-	unsigned long total_public_memory;
-	unsigned long free_public_memory;
-	unsigned long total_private_memory;
-	unsigned long free_private_memory;
+	unsigned long		 max_pin_len;
+	unsigned long		 min_pin_len;
+	unsigned long		 total_public_memory;
+	unsigned long		 free_public_memory;
+	unsigned long		 total_private_memory;
+	unsigned long		 free_private_memory;
 	libssig_version_info hardware_version;
 	libssig_version_info firmware_version;
 
@@ -75,8 +75,8 @@ typedef struct {
 
 typedef struct {
 	libssig_token* items;
-	size_t count;
-	unsigned long ck_rv;
+	size_t		   count;
+	unsigned long  ck_rv;
 } libssig_tokens;
 
 void libssig_version(int* major, int* minor, int* patch);
