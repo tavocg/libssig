@@ -36,4 +36,10 @@ libssig_status pkcs11_session_login(
 );
 CK_RV pkcs11_session_close(pkcs11_session* s);
 
+libssig_status pkcs11_collect_certificates(
+    pkcs11_session*       s,
+    libssig_certificates* certs,
+    CK_RV*                out_rv
+);
+
 #endif

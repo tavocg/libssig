@@ -37,6 +37,29 @@ typedef struct {
 	unsigned char minor;
 } libssig_version_info;
 
+/* Memoria del resultado de certificados; liberar con libssig_certificates_free.
+ */
+typedef struct {
+	/* ID binario; no es una cadena. NULL si el atributo no es accesible. */
+	unsigned char* id;
+	size_t         id_len;
+
+	/* Etiqueta UTF-8 terminada en cero; NULL si no es accesible.
+	 * label_len excluye el terminador. */
+	char*  label;
+	size_t label_len;
+
+	/* Certificado X.509; NULL si no está disponible localmente. */
+	unsigned char* der;
+	size_t         der_len;
+} libssig_certificate;
+
+typedef struct {
+	libssig_certificate* items;
+	size_t               count;
+	unsigned long        ck_rv;
+} libssig_certificates;
+
 /* Las cadenas pertenecen al resultado y se liberan con libssig_tokens_free. */
 typedef struct {
 	/* URI PKCS#11; puede coincidir con más de un token o módulo. */
@@ -86,6 +109,13 @@ void libssig_version(int* major, int* minor, int* patch);
 libssig_status libssig_list_tokens(libssig_tokens* result, bool hardware_only);
 
 void libssig_tokens_free(libssig_tokens* result);
+
+libssig_status libssig_list_certificates(
+    const libssig_token*  token,
+    libssig_certificates* certs
+);
+
+void libssig_certificates_free(libssig_certificates* certs);
 
 #ifdef __cplusplus
 }
