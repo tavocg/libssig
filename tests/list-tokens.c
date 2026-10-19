@@ -74,13 +74,13 @@ static void print_flags(unsigned long flags) {
 	puts("],");
 }
 
-/* null = información no disponible; "infinite" = límite sin cota. */
+/* null = información no disponible; -1 = límite sin cota. */
 static void print_value(const char* name, unsigned long value, bool limit) {
 	printf("      \"%s\": ", name);
 	if (value == CK_UNAVAILABLE_INFORMATION) {
 		fputs("null", stdout);
 	} else if (limit && value == CK_EFFECTIVELY_INFINITE) {
-		fputs("\"infinite\"", stdout);
+		fputs("-1", stdout);
 	} else {
 		printf("%lu", value);
 	}
