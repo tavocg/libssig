@@ -128,6 +128,25 @@ static libssig_status token_from_info(
 	token->serial =
 		copy_token_text(info->serialNumber, sizeof(info->serialNumber));
 	token->flags = info->flags;
+	token->max_session_count = info->ulMaxSessionCount;
+	token->session_count = info->ulSessionCount;
+	token->max_rw_session_count = info->ulMaxRwSessionCount;
+	token->rw_session_count = info->ulRwSessionCount;
+	token->max_pin_len = info->ulMaxPinLen;
+	token->min_pin_len = info->ulMinPinLen;
+	token->total_public_memory = info->ulTotalPublicMemory;
+	token->free_public_memory = info->ulFreePublicMemory;
+	token->total_private_memory = info->ulTotalPrivateMemory;
+	token->free_private_memory = info->ulFreePrivateMemory;
+	token->hardware_version =
+		(libssig_version_info){info->hardwareVersion.major,
+							   info->hardwareVersion.minor};
+	token->firmware_version =
+		(libssig_version_info){info->firmwareVersion.major,
+							   info->firmwareVersion.minor};
+	if (info->flags & CKF_CLOCK_ON_TOKEN) {
+		memcpy(token->utc_time, info->utcTime, sizeof(info->utcTime));
+	}
 
 	if (!token->label || !token->manufacturer || !token->model ||
 		!token->serial) {

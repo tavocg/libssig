@@ -31,12 +31,46 @@ typedef enum {
 } libssig_status;
 
 typedef struct {
+	unsigned char major;
+	unsigned char minor;
+} libssig_version_info;
+
+/* Las cadenas pertenecen al resultado y se liberan con libssig_tokens_free. */
+typedef struct {
+	/* URI PKCS#11; puede coincidir con más de un token o módulo. */
 	char* uri;
+
+	/* Texto terminado en cero, sin los espacios de relleno finales. */
 	char* label;
 	char* manufacturer;
 	char* model;
 	char* serial;
+
+	/* Máscara CKF_* de CK_TOKEN_INFO; no incluye flags del slot. */
 	unsigned long flags;
+
+	/* 0 indica sin límite fijo; ~0UL indica información no disponible. */
+	unsigned long max_session_count;
+
+	/* Incluye sesiones de lectura y lectura/escritura; ~0UL si no se sabe. */
+	unsigned long session_count;
+
+	/* 0 indica sin límite fijo; ~0UL indica información no disponible. */
+	unsigned long max_rw_session_count;
+
+	/* Sesiones de lectura/escritura; ~0UL si no se conoce la cantidad. */
+	unsigned long rw_session_count;
+
+	unsigned long max_pin_len;
+	unsigned long min_pin_len;
+	unsigned long total_public_memory;
+	unsigned long free_public_memory;
+	unsigned long total_private_memory;
+	unsigned long free_private_memory;
+	libssig_version_info hardware_version;
+	libssig_version_info firmware_version;
+
+	char utc_time[17];
 } libssig_token;
 
 typedef struct {
