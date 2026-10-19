@@ -15,3 +15,8 @@ add_test(NAME noop COMMAND noop_test)
 add_executable(list-tokens list-tokens.c)
 target_link_libraries(list-tokens PRIVATE libssig::ssig PkgConfig::P11_KIT)
 target_compile_options(list-tokens PRIVATE -Wall -Wextra -Wpedantic -Werror)
+
+add_executable(session_test session.test.c)
+target_link_libraries(session_test PRIVATE libssig::ssig PkgConfig::P11_KIT)
+target_compile_options(session_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME session COMMAND session_test)
