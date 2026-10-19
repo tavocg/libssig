@@ -95,7 +95,7 @@ argumentos).
 
 Para conseguir esto, se requiere lo siguiente:
 
-- [ ] `p11-kit` ya tiene `pkcs11-tool --module /path/to/pkcs11.so -T`, que
+- [X] `p11-kit` ya tiene `pkcs11-tool --module /path/to/pkcs11.so -T`, que
       expone información del token, como su URI. El objetivo es exponer un
       método `libssig_tokens` que básicamente funcione igual. La implementación
       de CLI lo expondría mediante `sign tokens`, pero idealmente permitiría
