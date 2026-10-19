@@ -15,3 +15,18 @@ add_test(NAME noop COMMAND noop_test)
 add_executable(list-tokens list-tokens.c)
 target_link_libraries(list-tokens PRIVATE libssig::ssig PkgConfig::P11_KIT)
 target_compile_options(list-tokens PRIVATE -Wall -Wextra -Wpedantic -Werror)
+
+add_executable(session_test session.test.c)
+target_link_libraries(session_test PRIVATE libssig::ssig PkgConfig::P11_KIT)
+target_compile_options(session_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME session COMMAND session_test)
+
+add_executable(login_test login.test.c)
+target_link_libraries(login_test PRIVATE libssig::ssig PkgConfig::P11_KIT)
+target_compile_options(login_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME login COMMAND login_test)
+
+# Manual integration check: prompts for a real token's PIN.
+add_executable(login-token login-token.c)
+target_link_libraries(login-token PRIVATE libssig::ssig PkgConfig::P11_KIT OpenSSL::Crypto)
+target_compile_options(login-token PRIVATE -Wall -Wextra -Wpedantic -Werror)

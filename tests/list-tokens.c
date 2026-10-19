@@ -38,27 +38,27 @@ static void print_string_field(const char* name, const char* value) {
 static void print_flags(unsigned long flags) {
 	static const struct {
 		unsigned long value;
-		const char* name;
+		const char*   name;
 	} names[] = {
-		{CKF_RNG, "rng"},
-		{CKF_WRITE_PROTECTED, "write-protected"},
-		{CKF_LOGIN_REQUIRED, "login-required"},
-		{CKF_USER_PIN_INITIALIZED, "user-pin-initialized"},
-		{CKF_RESTORE_KEY_NOT_NEEDED, "restore-key-not-needed"},
-		{CKF_CLOCK_ON_TOKEN, "clock-on-token"},
-		{CKF_PROTECTED_AUTHENTICATION_PATH, "protected-authentication-path"},
-		{CKF_DUAL_CRYPTO_OPERATIONS, "dual-crypto-operations"},
-		{CKF_TOKEN_INITIALIZED, "token-initialized"},
-		{CKF_SECONDARY_AUTHENTICATION, "secondary-authentication"},
-		{CKF_USER_PIN_COUNT_LOW, "user-pin-count-low"},
-		{CKF_USER_PIN_FINAL_TRY, "user-pin-final-try"},
-		{CKF_USER_PIN_LOCKED, "user-pin-locked"},
-		{CKF_USER_PIN_TO_BE_CHANGED, "user-pin-to-be-changed"},
-		{CKF_SO_PIN_COUNT_LOW, "so-pin-count-low"},
-		{CKF_SO_PIN_FINAL_TRY, "so-pin-final-try"},
-		{CKF_SO_PIN_LOCKED, "so-pin-locked"},
-		{CKF_SO_PIN_TO_BE_CHANGED, "so-pin-to-be-changed"},
-		{CKF_ERROR_STATE, "error-state"},
+	    {CKF_RNG, "rng"},
+	    {CKF_WRITE_PROTECTED, "write-protected"},
+	    {CKF_LOGIN_REQUIRED, "login-required"},
+	    {CKF_USER_PIN_INITIALIZED, "user-pin-initialized"},
+	    {CKF_RESTORE_KEY_NOT_NEEDED, "restore-key-not-needed"},
+	    {CKF_CLOCK_ON_TOKEN, "clock-on-token"},
+	    {CKF_PROTECTED_AUTHENTICATION_PATH, "protected-authentication-path"},
+	    {CKF_DUAL_CRYPTO_OPERATIONS, "dual-crypto-operations"},
+	    {CKF_TOKEN_INITIALIZED, "token-initialized"},
+	    {CKF_SECONDARY_AUTHENTICATION, "secondary-authentication"},
+	    {CKF_USER_PIN_COUNT_LOW, "user-pin-count-low"},
+	    {CKF_USER_PIN_FINAL_TRY, "user-pin-final-try"},
+	    {CKF_USER_PIN_LOCKED, "user-pin-locked"},
+	    {CKF_USER_PIN_TO_BE_CHANGED, "user-pin-to-be-changed"},
+	    {CKF_SO_PIN_COUNT_LOW, "so-pin-count-low"},
+	    {CKF_SO_PIN_FINAL_TRY, "so-pin-final-try"},
+	    {CKF_SO_PIN_LOCKED, "so-pin-locked"},
+	    {CKF_SO_PIN_TO_BE_CHANGED, "so-pin-to-be-changed"},
+	    {CKF_ERROR_STATE, "error-state"},
 	};
 	printf("      \"flags\": %lu,\n      \"flag_names\": [", flags);
 	bool first = true;
@@ -95,14 +95,14 @@ static void print_token(const libssig_token* token) {
 	print_string_field("serial", token->serial);
 	print_flags(token->flags);
 	printf(
-		"      \"hardware_version\": {\"major\": %u, \"minor\": %u},\n",
-		(unsigned)token->hardware_version.major,
-		(unsigned)token->hardware_version.minor
+	    "      \"hardware_version\": {\"major\": %u, \"minor\": %u},\n",
+	    (unsigned)token->hardware_version.major,
+	    (unsigned)token->hardware_version.minor
 	);
 	printf(
-		"      \"firmware_version\": {\"major\": %u, \"minor\": %u},\n",
-		(unsigned)token->firmware_version.major,
-		(unsigned)token->firmware_version.minor
+	    "      \"firmware_version\": {\"major\": %u, \"minor\": %u},\n",
+	    (unsigned)token->firmware_version.major,
+	    (unsigned)token->firmware_version.minor
 	);
 	fputs("      \"utc_time\": ", stdout);
 	if (token->utc_time[0]) {
@@ -140,9 +140,9 @@ int main(void) {
 
 	if (status != LIBSSIG_OK) {
 		printf(
-			"{\"error\": {\"status\": %d, \"ck_rv\": %lu}}\n",
-			(int)status,
-			tokens.ck_rv
+		    "{\"error\": {\"status\": %d, \"ck_rv\": %lu}}\n",
+		    (int)status,
+		    tokens.ck_rv
 		);
 		libssig_tokens_free(&tokens);
 		return 1;
