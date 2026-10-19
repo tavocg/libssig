@@ -18,14 +18,14 @@ typedef struct {
 } pkcs11_session;
 
 /* Inicializar los recursos con {0}; cerrarlos antes de reutilizarlos. */
-libssig_status pkcs11_context_open(pkcs11_context* context);
-void		   pkcs11_context_close(pkcs11_context* context);
+libssig_status pkcs11_context_open(pkcs11_context* ctx);
+void		   pkcs11_context_close(pkcs11_context* ctx);
 libssig_status pkcs11_session_open(
-	const pkcs11_context* context,
+	const pkcs11_context* ctx,
 	const char*			  uri,
-	pkcs11_session*		  session,
+	pkcs11_session*		  s,
 	CK_RV*				  out_rv
 );
-CK_RV pkcs11_session_close(pkcs11_session* session);
+CK_RV pkcs11_session_close(pkcs11_session* s);
 
 #endif
