@@ -30,3 +30,8 @@ add_test(NAME login COMMAND login_test)
 add_executable(login-token login-token.c)
 target_link_libraries(login-token PRIVATE libssig::ssig PkgConfig::P11_KIT OpenSSL::Crypto)
 target_compile_options(login-token PRIVATE -Wall -Wextra -Wpedantic -Werror)
+
+add_executable(certificates_test certificates.test.c)
+target_link_libraries(certificates_test PRIVATE libssig::ssig PkgConfig::P11_KIT)
+target_compile_options(certificates_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME certificates COMMAND certificates_test)
