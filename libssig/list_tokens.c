@@ -295,26 +295,23 @@ libssig_status libssig_list_tokens(libssig_tokens* result, bool hardware_only) {
 
 	*result = (libssig_tokens){0};
 
-	pkcs11_context context = {0};
-	libssig_status status = pkcs11_context_open(&context);
+	pkcs11_context ctx = {0};
+	libssig_status status = pkcs11_context_open(&ctx);
 
 	if (status != LIBSSIG_OK) {
 		return status;
 	}
 
 	libssig_tokens collected = {0};
-	for (size_t m = 0; context.modules[m] != NULL; ++m) {
-		status = collect_module_tokens(
-			context.modules[m],
-			hardware_only,
-			&collected
-		);
+	for (size_t m = 0; ctx.modules[m] != NULL; ++m) {
+		status =
+			collect_module_tokens(ctx.modules[m], hardware_only, &collected);
 		if (status != LIBSSIG_OK) {
 			break;
 		}
 	}
 
-	pkcs11_context_close(&context);
+	pkcs11_context_close(&ctx);
 
 	if (status != LIBSSIG_OK) {
 		unsigned long ck_rv = collected.ck_rv;
