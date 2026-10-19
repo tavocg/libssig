@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include <libssig/internal.h>
+#include <limits.h>
 #include <p11-kit/uri.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -129,6 +130,45 @@ libssig_status pkcs11_session_open(
 	pending.open = true;
 	*s = pending;
 	return LIBSSIG_OK;
+}
+
+libssig_status pkcs11_session_login(
+    pkcs11_session*      s,
+    const unsigned char* pin,
+    size_t               pin_len,
+    CK_RV*               out_rv
+) {
+	if (!out_rv) {
+		return LIBSSIG_ERROR_ARGUMENT;
+	}
+	*out_rv = CKR_OK;
+	if (!s || !s->open || !s->module || (!pin && pin_len) ||
+	    pin_len > ULONG_MAX) {
+		return LIBSSIG_ERROR_ARGUMENT;
+	}
+
+	CK_TOKEN_INFO info;
+	*out_rv = s->module->C_GetTokenInfo(s->slot, &info);
+	if (*out_rv != CKR_OK) {
+		return LIBSSIG_ERROR_PKCS11;
+	}
+	if (!(info.flags & CKF_LOGIN_REQUIRED)) {
+		return LIBSSIG_OK;
+	}
+	if (!pin && !(info.flags & CKF_PROTECTED_AUTHENTICATION_PATH)) {
+		return LIBSSIG_ERROR_ARGUMENT;
+	}
+
+	*out_rv = s->module->C_Login(
+	    s->handle,
+	    CKU_USER,
+	    (CK_UTF8CHAR_PTR)pin,
+	    (CK_ULONG)pin_len
+	);
+	if (*out_rv == CKR_OK || *out_rv == CKR_USER_ALREADY_LOGGED_IN) {
+		return LIBSSIG_OK;
+	}
+	return LIBSSIG_ERROR_PKCS11;
 }
 
 CK_RV pkcs11_session_close(pkcs11_session* s) {

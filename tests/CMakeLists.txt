@@ -20,3 +20,8 @@ add_executable(session_test session.test.c)
 target_link_libraries(session_test PRIVATE libssig::ssig PkgConfig::P11_KIT)
 target_compile_options(session_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME session COMMAND session_test)
+
+add_executable(login_test login.test.c)
+target_link_libraries(login_test PRIVATE libssig::ssig PkgConfig::P11_KIT)
+target_compile_options(login_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME login COMMAND login_test)
