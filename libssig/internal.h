@@ -29,10 +29,10 @@ libssig_status pkcs11_session_open(
 /* No guarda el PIN. NULL, 0 solicita la ruta protegida del dispositivo.
  * Un PIN vacío explícito se pasa con un puntero no NULL y longitud cero. */
 libssig_status pkcs11_session_login(
-    pkcs11_session* s,
+    pkcs11_session*      s,
     const unsigned char* pin,
-    size_t pin_len,
-    CK_RV* out_rv
+    size_t               pin_len,
+    CK_RV*               out_rv
 );
 CK_RV pkcs11_session_close(pkcs11_session* s);
 
