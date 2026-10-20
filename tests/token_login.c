@@ -6,7 +6,7 @@
 #include <string.h>
 #include <unistd.h>
 
-static void print_error(
+static void error_print(
     const char*    operation,
     libssig_status status,
     CK_RV          rv
@@ -21,19 +21,19 @@ static void print_error(
 	);
 }
 
-static libssig_status login_token(pkcs11_session* s, CK_RV* out_rv) {
-	CK_TOKEN_INFO info;
-	*out_rv = s->module->C_GetTokenInfo(s->slot, &info);
+static libssig_status token_login(libssig_session* s, CK_RV* out_rv) {
+	CK_TOKEN_INFO token_info;
+	*out_rv = s->module->C_GetTokenInfo(s->slot, &token_info);
 	if (*out_rv != CKR_OK) {
 		return LIBSSIG_ERROR_PKCS11;
 	}
-	if (!(info.flags & CKF_LOGIN_REQUIRED)) {
+	if (!(token_info.flags & CKF_LOGIN_REQUIRED)) {
 		puts("El token no requiere autenticación.");
 		return LIBSSIG_OK;
 	}
-	if (info.flags & CKF_PROTECTED_AUTHENTICATION_PATH) {
+	if (token_info.flags & CKF_PROTECTED_AUTHENTICATION_PATH) {
 		puts("Completá la autenticación en el dispositivo.");
-		return pkcs11_session_login(s, NULL, 0, out_rv);
+		return libssig_session_login(s, NULL, 0, out_rv);
 	}
 
 	if (!isatty(STDIN_FILENO)) {
@@ -50,8 +50,12 @@ static libssig_status login_token(pkcs11_session* s, CK_RV* out_rv) {
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
 
-	libssig_status status =
-	    pkcs11_session_login(s, (const unsigned char*)pin, strlen(pin), out_rv);
+	libssig_status status = libssig_session_login(
+	    s,
+	    (const unsigned char*)pin,
+	    strlen(pin),
+	    out_rv
+	);
 	OPENSSL_cleanse(pin, sizeof(pin));
 	return status;
 }
@@ -62,33 +66,33 @@ int main(int argc, char** argv) {
 		return 1;
 	}
 
-	pkcs11_context ctx = {0};
-	libssig_status status = pkcs11_context_open(&ctx);
+	libssig_context ctx = {0};
+	libssig_status  status = libssig_context_open(&ctx);
 	if (status != LIBSSIG_OK) {
-		print_error("Cargar módulos", status, CKR_OK);
+		error_print("Cargar módulos", status, CKR_OK);
 		return 1;
 	}
 
-	pkcs11_session s = {0};
-	CK_RV          rv = CKR_OK;
-	status = pkcs11_session_open(&ctx, argv[1], &s, &rv);
+	libssig_session s = {0};
+	CK_RV           rv = CKR_OK;
+	status = libssig_session_open(&ctx, argv[1], &s, &rv);
 	if (status != LIBSSIG_OK) {
-		print_error("Abrir sesión", status, rv);
-		pkcs11_context_close(&ctx);
+		error_print("Abrir sesión", status, rv);
+		libssig_context_close(&ctx);
 		return 1;
 	}
 
-	status = login_token(&s, &rv);
+	status = token_login(&s, &rv);
 	if (status != LIBSSIG_OK) {
-		print_error("Autenticar", status, rv);
+		error_print("Autenticar", status, rv);
 	} else {
 		puts("Sesión autenticada correctamente.");
 	}
 
-	CK_RV close_rv = pkcs11_session_close(&s);
-	pkcs11_context_close(&ctx);
+	CK_RV close_rv = libssig_session_close(&s);
+	libssig_context_close(&ctx);
 	if (close_rv != CKR_OK) {
-		print_error("Cerrar sesión", LIBSSIG_ERROR_PKCS11, close_rv);
+		error_print("Cerrar sesión", LIBSSIG_ERROR_PKCS11, close_rv);
 		return 1;
 	}
 	return status == LIBSSIG_OK ? 0 : 1;

@@ -25,7 +25,7 @@ pkg_check_modules(P11_KIT REQUIRED IMPORTED_TARGET p11-kit-1)
 file(GLOB_RECURSE LIBSSIG_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/libssig/*.c"
 )
-list(FILTER LIBSSIG_SOURCES EXCLUDE REGEX "\\.test\\.c$")
+list(FILTER LIBSSIG_SOURCES EXCLUDE REGEX "_test\\.c$")
 
 add_library(ssig SHARED ${LIBSSIG_SOURCES})
 add_library(libssig::ssig ALIAS ssig)

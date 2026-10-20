@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 
-static void print_json_text(const char* text, size_t length) {
+static void json_text_print(const char* text, size_t length) {
 	putchar('"');
 	for (size_t i = 0; i < length; ++i) {
 		const unsigned char* p = (const unsigned char*)text + i;
@@ -31,17 +31,17 @@ static void print_json_text(const char* text, size_t length) {
 	putchar('"');
 }
 
-static void print_json_string(const char* text) {
-	print_json_text(text, strlen(text));
+static void json_string_print(const char* text) {
+	json_text_print(text, strlen(text));
 }
 
-static void print_string_field(const char* name, const char* value) {
+static void string_field_print(const char* name, const char* value) {
 	printf("      \"%s\": ", name);
-	print_json_string(value);
+	json_string_print(value);
 	puts(",");
 }
 
-static void print_flags(unsigned long flags) {
+static void flags_print(unsigned long flags) {
 	static const struct {
 		unsigned long value;
 		const char*   name;
@@ -73,7 +73,7 @@ static void print_flags(unsigned long flags) {
 			if (!first) {
 				fputs(", ", stdout);
 			}
-			print_json_string(names[i].name);
+			json_string_print(names[i].name);
 			first = false;
 		}
 	}
@@ -81,7 +81,7 @@ static void print_flags(unsigned long flags) {
 }
 
 /* null = información no disponible; -1 = límite sin cota. */
-static void print_value(const char* name, unsigned long value, bool limit) {
+static void value_print(const char* name, unsigned long value, bool limit) {
 	printf("      \"%s\": ", name);
 	if (value == CK_UNAVAILABLE_INFORMATION) {
 		fputs("null", stdout);
@@ -92,7 +92,7 @@ static void print_value(const char* name, unsigned long value, bool limit) {
 	}
 }
 
-static void print_hex(const unsigned char* data, size_t length) {
+static void hex_print(const unsigned char* data, size_t length) {
 	if (!data) {
 		fputs("null", stdout);
 		return;
@@ -104,7 +104,7 @@ static void print_hex(const unsigned char* data, size_t length) {
 	putchar('"');
 }
 
-static void print_certificates(const libssig_certificates* certs) {
+static void certificates_print(const libssig_certificates* certs) {
 	fputs("      \"certificates\": [", stdout);
 	for (size_t i = 0; i < certs->count; ++i) {
 		const libssig_certificate* cert = &certs->items[i];
@@ -112,31 +112,31 @@ static void print_certificates(const libssig_certificates* certs) {
 			fputs(",", stdout);
 		}
 		fputs("\n        {\"id_hex\": ", stdout);
-		print_hex(cert->id, cert->id_len);
+		hex_print(cert->id, cert->id_len);
 		printf(", \"id_len\": %zu, \"label\": ", cert->id_len);
 		if (cert->label) {
-			print_json_text(cert->label, cert->label_len);
+			json_text_print(cert->label, cert->label_len);
 		} else {
 			fputs("null", stdout);
 		}
 		printf(", \"label_len\": %zu, \"der_hex\": ", cert->label_len);
-		print_hex(cert->der, cert->der_len);
+		hex_print(cert->der, cert->der_len);
 		printf(", \"der_len\": %zu}", cert->der_len);
 	}
 	puts("]");
 }
 
-static void print_token(
+static void token_print(
     const libssig_token*        token,
     const libssig_certificates* certs
 ) {
 	puts("    {");
-	print_string_field("uri", token->uri);
-	print_string_field("label", token->label);
-	print_string_field("manufacturer", token->manufacturer);
-	print_string_field("model", token->model);
-	print_string_field("serial", token->serial);
-	print_flags(token->flags);
+	string_field_print("uri", token->uri);
+	string_field_print("label", token->label);
+	string_field_print("manufacturer", token->manufacturer);
+	string_field_print("model", token->model);
+	string_field_print("serial", token->serial);
+	flags_print(token->flags);
 	printf(
 	    "      \"hardware_version\": {\"major\": %u, \"minor\": %u},\n",
 	    (unsigned)token->hardware_version.major,
@@ -149,38 +149,38 @@ static void print_token(
 	);
 	fputs("      \"utc_time\": ", stdout);
 	if (token->utc_time[0]) {
-		print_json_string(token->utc_time);
+		json_string_print(token->utc_time);
 	} else {
 		fputs("null", stdout);
 	}
 	puts(",");
-	print_value("max_session_count", token->max_session_count, true);
+	value_print("max_session_count", token->max_session_count, true);
 	puts(",");
-	print_value("session_count", token->session_count, false);
+	value_print("session_count", token->session_count, false);
 	puts(",");
-	print_value("max_rw_session_count", token->max_rw_session_count, true);
+	value_print("max_rw_session_count", token->max_rw_session_count, true);
 	puts(",");
-	print_value("rw_session_count", token->rw_session_count, false);
+	value_print("rw_session_count", token->rw_session_count, false);
 	puts(",");
-	print_value("max_pin_len", token->max_pin_len, false);
+	value_print("max_pin_len", token->max_pin_len, false);
 	puts(",");
-	print_value("min_pin_len", token->min_pin_len, false);
+	value_print("min_pin_len", token->min_pin_len, false);
 	puts(",");
-	print_value("total_public_memory", token->total_public_memory, false);
+	value_print("total_public_memory", token->total_public_memory, false);
 	puts(",");
-	print_value("free_public_memory", token->free_public_memory, false);
+	value_print("free_public_memory", token->free_public_memory, false);
 	puts(",");
-	print_value("total_private_memory", token->total_private_memory, false);
+	value_print("total_private_memory", token->total_private_memory, false);
 	puts(",");
-	print_value("free_private_memory", token->free_private_memory, false);
+	value_print("free_private_memory", token->free_private_memory, false);
 	puts(",");
-	print_certificates(certs);
+	certificates_print(certs);
 	fputs("    }", stdout);
 }
 
 int main(void) {
 	libssig_tokens tokens = {0};
-	libssig_status status = libssig_list_tokens(&tokens, true);
+	libssig_status status = libssig_tokens_list(&tokens, true);
 
 	if (status != LIBSSIG_OK) {
 		printf(
@@ -195,7 +195,7 @@ int main(void) {
 	printf("{\n  \"count\": %zu,\n  \"tokens\": [\n", tokens.count);
 	for (size_t i = 0; i < tokens.count; ++i) {
 		libssig_certificates certs = {0};
-		status = libssig_list_certificates(&tokens.items[i], &certs);
+		status = libssig_certificates_list(&tokens.items[i], &certs);
 		if (status != LIBSSIG_OK) {
 			fprintf(
 			    stderr,
@@ -207,7 +207,7 @@ int main(void) {
 			libssig_tokens_free(&tokens);
 			return 1;
 		}
-		print_token(&tokens.items[i], &certs);
+		token_print(&tokens.items[i], &certs);
 		libssig_certificates_free(&certs);
 		puts(i + 1 < tokens.count ? "," : "");
 	}
