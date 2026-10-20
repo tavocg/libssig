@@ -19,7 +19,7 @@ include(CMakePackageConfigHelpers)
 include(CTest)
 
 find_package(PkgConfig REQUIRED)
-find_package(OpenSSL REQUIRED COMPONENTS Crypto)
+find_package(OpenSSL 3.0 REQUIRED COMPONENTS Crypto)
 pkg_check_modules(P11_KIT REQUIRED IMPORTED_TARGET p11-kit-1)
 
 file(GLOB_RECURSE LIBSSIG_SOURCES CONFIGURE_DEPENDS

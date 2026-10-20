@@ -1,8 +1,10 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-#include <libssig/internal.h>
+#include <libssig/cms_internal.h>
 #include <openssl/cms.h>
 #include <openssl/ec.h>
+#include <openssl/ess.h>
 #include <openssl/evp.h>
+#include <openssl/pem.h>
 #include <openssl/rsa.h>
 #include <openssl/x509.h>
 #include <stdio.h>
@@ -394,7 +396,10 @@ static int cms_verify(
 	);
 	STACK_OF(CMS_SignerInfo)* signers = CMS_get0_SignerInfos(cms);
 	CHECK(sk_CMS_SignerInfo_num(signers) == 1);
-	CHECK(CMS_signed_get_attr_count(sk_CMS_SignerInfo_value(signers, 0)) < 0);
+	CHECK(
+	    CMS_signed_get_attr_count(sk_CMS_SignerInfo_value(signers, 0)) < 0 ||
+	    CMS_signed_get_attr_count(sk_CMS_SignerInfo_value(signers, 0)) == 5
+	);
 	STACK_OF(X509)* certs = CMS_get1_certs(cms);
 	CHECK(sk_X509_num(certs) == 1);
 	sk_X509_pop_free(certs, X509_free);
@@ -433,6 +438,250 @@ static int fixture_write(
 	return 0;
 }
 
+static int cades_cardinality_check(CMS_ContentInfo* cms) {
+	CMS_SignerInfo* signer = sk_CMS_SignerInfo_value(
+	    CMS_get0_SignerInfos(cms),
+	    0
+	);
+	CHECK(CMS_signed_get_attr_count(signer) == 5);
+	const int nids[] = {
+	    NID_pkcs9_contentType,
+	    NID_pkcs9_messageDigest,
+	    NID_pkcs9_signingTime,
+	    NID_id_smime_aa_signingCertificateV2
+	};
+	for (size_t i = 0; i < sizeof(nids) / sizeof(nids[0]); ++i) {
+		int index = CMS_signed_get_attr_by_NID(signer, nids[i], -1);
+		CHECK(
+		    index >= 0 && CMS_signed_get_attr_by_NID(signer, nids[i], index) < 0
+		);
+		CHECK(X509_ATTRIBUTE_count(CMS_signed_get_attr(signer, index)) == 1);
+	}
+	return 0;
+}
+
+static int cades_mime_check(
+    CMS_ContentInfo*           cms,
+    const libssig_sign_params* params
+) {
+	CMS_SignerInfo* signer = sk_CMS_SignerInfo_value(
+	    CMS_get0_SignerInfos(cms),
+	    0
+	);
+	ASN1_OBJECT* mime_oid = OBJ_txt2obj(LIBSSIG_CADES_MIME_TYPE_OID, 1);
+	CHECK(mime_oid);
+	int mime_index = CMS_signed_get_attr_by_OBJ(signer, mime_oid, -1);
+	CHECK(
+	    mime_index >= 0 &&
+	    CMS_signed_get_attr_by_OBJ(signer, mime_oid, mime_index) < 0
+	);
+	ASN1_STRING* mime = CMS_signed_get0_data_by_OBJ(
+	    signer,
+	    mime_oid,
+	    -3,
+	    V_ASN1_UTF8STRING
+	);
+	const char* expected_mime = params->mime_type ? params->mime_type
+	                                              : "application/octet-stream";
+	CHECK(mime && ASN1_STRING_length(mime) == (int)strlen(expected_mime));
+	CHECK(!memcmp(
+	    ASN1_STRING_get0_data(mime),
+	    expected_mime,
+	    strlen(expected_mime)
+	));
+	ASN1_OBJECT_free(mime_oid);
+	return 0;
+}
+
+static int cades_content_check(
+    CMS_ContentInfo*           cms,
+    const libssig_sign_params* params
+) {
+	CMS_SignerInfo* signer = sk_CMS_SignerInfo_value(
+	    CMS_get0_SignerInfos(cms),
+	    0
+	);
+	ASN1_OBJECT* type = CMS_signed_get0_data_by_OBJ(
+	    signer,
+	    OBJ_nid2obj(NID_pkcs9_contentType),
+	    -3,
+	    V_ASN1_OBJECT
+	);
+	CHECK(type && OBJ_obj2nid(type) == NID_pkcs7_data);
+	ASN1_OCTET_STRING* hash = CMS_signed_get0_data_by_OBJ(
+	    signer,
+	    OBJ_nid2obj(NID_pkcs9_messageDigest),
+	    -3,
+	    V_ASN1_OCTET_STRING
+	);
+	unsigned char expected[EVP_MAX_MD_SIZE];
+	unsigned int  len = 0;
+	CHECK(
+	    EVP_Digest(params->data, params->data_len, expected, &len, digest, NULL)
+	);
+	CHECK(hash && ASN1_STRING_length(hash) == (int)len);
+	CHECK(!memcmp(ASN1_STRING_get0_data(hash), expected, len));
+	return 0;
+}
+
+static int cades_time_check(CMS_ContentInfo* cms) {
+	CMS_SignerInfo* signer = sk_CMS_SignerInfo_value(
+	    CMS_get0_SignerInfos(cms),
+	    0
+	);
+	int index = CMS_signed_get_attr_by_NID(signer, NID_pkcs9_signingTime, -1);
+	ASN1_TYPE* time = X509_ATTRIBUTE_get0_type(
+	    CMS_signed_get_attr(signer, index),
+	    0
+	);
+	CHECK(
+	    time &&
+	    (time->type == V_ASN1_UTCTIME || time->type == V_ASN1_GENERALIZEDTIME)
+	);
+	CHECK(ASN1_TIME_check((ASN1_TIME*)time->value.asn1_string));
+	return 0;
+}
+
+static int cades_certificate_check(CMS_ContentInfo* cms) {
+	CMS_SignerInfo* signer = sk_CMS_SignerInfo_value(
+	    CMS_get0_SignerInfos(cms),
+	    0
+	);
+	ASN1_STRING* sequence = CMS_signed_get0_data_by_OBJ(
+	    signer,
+	    OBJ_nid2obj(NID_id_smime_aa_signingCertificateV2),
+	    -3,
+	    V_ASN1_SEQUENCE
+	);
+	CHECK(sequence);
+	const unsigned char* cursor = ASN1_STRING_get0_data(sequence);
+	ESS_SIGNING_CERT_V2* ess = d2i_ESS_SIGNING_CERT_V2(
+	    NULL,
+	    &cursor,
+	    ASN1_STRING_length(sequence)
+	);
+	STACK_OF(X509)* certs = CMS_get1_certs(cms);
+	CHECK(ess && OSSL_ESS_check_signing_certs(NULL, ess, certs, 1) == 1);
+	ESS_SIGNING_CERT_V2_free(ess);
+	sk_X509_pop_free(certs, X509_free);
+	return 0;
+}
+
+static int cades_attributes_check(
+    CMS_ContentInfo*           cms,
+    const libssig_sign_params* params
+) {
+	CHECK(cades_cardinality_check(cms) == 0);
+	CHECK(cades_mime_check(cms, params) == 0);
+	CHECK(cades_content_check(cms, params) == 0);
+	CHECK(cades_time_check(cms) == 0);
+	CHECK(cades_certificate_check(cms) == 0);
+	return 0;
+}
+
+static int cades_certificate_hash_corrupt(
+    CMS_ContentInfo*           cms,
+    const libssig_context*     ctx,
+    const libssig_sign_params* params
+) {
+	CMS_SignerInfo* signer = sk_CMS_SignerInfo_value(
+	    CMS_get0_SignerInfos(cms),
+	    0
+	);
+	int index = CMS_signed_get_attr_by_NID(
+	    signer,
+	    NID_id_smime_aa_signingCertificateV2,
+	    -1
+	);
+	ASN1_STRING* sequence = CMS_signed_get0_data_by_OBJ(
+	    signer,
+	    OBJ_nid2obj(NID_id_smime_aa_signingCertificateV2),
+	    -3,
+	    V_ASN1_SEQUENCE
+	);
+	CHECK(sequence);
+	int            len = ASN1_STRING_length(sequence);
+	unsigned char* encoded = OPENSSL_memdup(
+	    ASN1_STRING_get0_data(sequence),
+	    (size_t)len
+	);
+	CHECK(encoded && len > 0);
+	encoded[len - 1] ^= 1; /* Last byte of the cert hash; issuerSerial is
+	                          omitted. */
+	X509_ATTRIBUTE_free(CMS_signed_delete_attr(signer, index));
+	CHECK(CMS_signed_add1_attr_by_NID(
+	    signer,
+	    NID_id_smime_aa_signingCertificateV2,
+	    V_ASN1_SEQUENCE,
+	    encoded,
+	    len
+	));
+	OPENSSL_free(encoded);
+	libssig_sign_params signing = *params;
+	unsigned char*      attributes = libssig_cades_attributes_encode(
+        signer,
+        &signing.data_len
+    );
+	CHECK(attributes);
+	signing.data = attributes;
+	libssig_signature raw = {0};
+	CHECK(libssig_session_sign(ctx, &signing, &raw) == LIBSSIG_OK);
+	OPENSSL_free(attributes);
+	CHECK(ASN1_OCTET_STRING_set(
+	    CMS_SignerInfo_get0_signature(signer),
+	    raw.data,
+	    (int)raw.len
+	));
+	libssig_signature_free(&raw);
+	unsigned char* der = NULL;
+	len = i2d_CMS_ContentInfo(cms, &der);
+	CHECK(len > 0);
+	libssig_signature output = {.data = der, .len = (size_t)len};
+	/* Signature remains valid; independent -cades verification must reject the
+	 * ESS hash. */
+	CHECK(cms_verify(&output, params->data, params->data_len) == 0);
+	CHECK(fixture_write("cades-bad-cert.p7s", der, (size_t)len) == 0);
+	OPENSSL_free(der);
+	return 0;
+}
+
+static int cades_check(
+    const libssig_context*     ctx,
+    libssig_sign_params*       params,
+    const libssig_certificate* cert
+) {
+	libssig_signature output = {0};
+	CHECK(libssig_cades_sign(ctx, params, cert, &output) == LIBSSIG_OK);
+	CHECK(cms_verify(&output, params->data, params->data_len) == 0);
+	const unsigned char altered[] = {0, 0xff, 43};
+	CHECK(cms_verify(&output, altered, sizeof(altered)) == -1);
+	const unsigned char* cursor = output.data;
+	CMS_ContentInfo* cms = d2i_CMS_ContentInfo(NULL, &cursor, (long)output.len);
+	CHECK(cms && cades_attributes_check(cms, params) == 0);
+	char name[64];
+	snprintf(name, sizeof(name), "cades-%d-%d.p7s", params->algo, params->hash);
+	CHECK(fixture_write(name, output.data, output.len) == 0);
+	STACK_OF(X509)* certs = CMS_get1_certs(cms);
+	BIO* pem = BIO_new(BIO_s_mem());
+	CHECK(pem && PEM_write_bio_X509(pem, sk_X509_value(certs, 0)));
+	char* bytes = NULL;
+	long  len = BIO_get_mem_data(pem, &bytes);
+	snprintf(name, sizeof(name), "cades-%d-%d.pem", params->algo, params->hash);
+	CHECK(
+	    len > 0 &&
+	    fixture_write(name, (const unsigned char*)bytes, (size_t)len) == 0
+	);
+	BIO_free(pem);
+	sk_X509_pop_free(certs, X509_free);
+	if (params->algo == LIBSSIG_ALGO_RSA_PKCS &&
+	    params->hash == LIBSSIG_HASH_SHA256) {
+		CHECK(cades_certificate_hash_corrupt(cms, ctx, params) == 0);
+	}
+	CMS_ContentInfo_free(cms);
+	libssig_signature_free(&output);
+	return 0;
+}
+
 static int cms_check(const libssig_context* ctx, libssig_sign_params* params) {
 	X509* x509 = cms_certificate_create(rsa);
 	CHECK(x509);
@@ -449,6 +698,13 @@ static int cms_check(const libssig_context* ctx, libssig_sign_params* params) {
 	libssig_signature output = {0};
 	CHECK(libssig_cms_sign(ctx, params, &cert, &output) == LIBSSIG_OK);
 	CHECK(cms_verify(&output, params->data, params->data_len) == 0);
+	CHECK(cades_check(ctx, params, &cert) == 0);
+	if (params->algo == LIBSSIG_ALGO_RSA_PKCS &&
+	    params->hash == LIBSSIG_HASH_SHA256) {
+		params->mime_type = "application/pdf";
+		CHECK(cades_check(ctx, params, &cert) == 0);
+		params->mime_type = NULL;
+	}
 	const unsigned char altered[] = {0, 0xff, 43};
 	CHECK(cms_verify(&output, altered, sizeof(altered)) == -1);
 	char name[64];
@@ -481,6 +737,9 @@ static int cms_check(const libssig_context* ctx, libssig_sign_params* params) {
 		params->data = NULL;
 		params->data_len = 0;
 		CHECK(libssig_cms_sign(ctx, params, &cert, &output) == LIBSSIG_OK);
+		CHECK(cms_verify(&output, (const unsigned char*)"", 0) == 0);
+		libssig_signature_free(&output);
+		CHECK(libssig_cades_sign(ctx, params, &cert, &output) == LIBSSIG_OK);
 		CHECK(cms_verify(&output, (const unsigned char*)"", 0) == 0);
 		libssig_signature_free(&output);
 		params->data = saved_data;

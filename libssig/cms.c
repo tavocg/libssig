@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-#include <libssig/internal.h>
+#include <libssig/cms_internal.h>
 #include <limits.h>
 #include <openssl/cms.h>
 #include <openssl/ecdsa.h>
@@ -146,7 +146,7 @@ static bool signature_set(
 static CMS_ContentInfo* container_create(
     X509*                      cert,
     const libssig_sign_params* params,
-    const libssig_signature*   raw
+    bool                       cades
 ) {
 	CMS_ContentInfo* cms = CMS_sign(
 	    NULL,
@@ -163,13 +163,15 @@ static CMS_ContentInfo* container_create(
 	                                   cert,
 	                                   public_key,
 	                                   digest,
-	                                   CMS_NOATTR | CMS_NOSMIMECAP | CMS_PARTIAL
+	                                   CMS_NOSMIMECAP | CMS_PARTIAL |
+	                                       (cades ? 0 : CMS_NOATTR)
 	                               )
 	                             : NULL;
 	EVP_PKEY_free(public_key);
 	if (!signer || !CMS_set_detached(cms, 1) ||
 	    !signature_algorithm_set(signer, params->algo, digest) ||
-	    !signature_set(signer, params->algo, raw)) {
+	    (cades &&
+	     !libssig_cades_attributes_add(signer, cert, params, digest))) {
 		CMS_ContentInfo_free(cms);
 		return NULL;
 	}
@@ -231,10 +233,45 @@ static bool params_valid(
 	       (params->data || !params->data_len) && params->data_len <= INT_MAX;
 }
 
-libssig_status libssig_cms_sign(
+static libssig_status container_sign(
+    const libssig_context*     ctx,
+    const libssig_sign_params* params,
+    CMS_ContentInfo*           cms,
+    bool                       cades,
+    libssig_signature*         output
+) {
+	CMS_SignerInfo* signer = sk_CMS_SignerInfo_value(
+	    CMS_get0_SignerInfos(cms),
+	    0
+	);
+	libssig_sign_params signing = *params;
+	unsigned char*      attributes = NULL;
+	if (cades) {
+		attributes = libssig_cades_attributes_encode(signer, &signing.data_len);
+		if (!attributes) {
+			return LIBSSIG_ERROR_CRYPTO;
+		}
+		signing.data = attributes;
+	}
+
+	libssig_signature raw = {0};
+	libssig_status    status = libssig_session_sign(ctx, &signing, &raw);
+	OPENSSL_free(attributes);
+	if (status == LIBSSIG_OK) {
+		bool ok = signature_set(signer, params->algo, &raw) &&
+		          container_verify(cms, params);
+		status = ok ? container_encode(cms, output) : LIBSSIG_ERROR_CRYPTO;
+	}
+	output->ck_rv = raw.ck_rv;
+	libssig_signature_free(&raw);
+	return status;
+}
+
+static libssig_status detached_sign(
     const libssig_context*     ctx,
     const libssig_sign_params* params,
     const libssig_certificate* cert,
+    bool                       cades,
     libssig_signature*         output
 ) {
 	if (!output) {
@@ -251,19 +288,29 @@ libssig_status libssig_cms_sign(
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
 
-	libssig_signature raw = {0};
-	libssig_status    status = libssig_session_sign(ctx, params, &raw);
-	CMS_ContentInfo*  cms = status == LIBSSIG_OK
-	                            ? container_create(x509, params, &raw)
-	                            : NULL;
-	if (status == LIBSSIG_OK) {
-		status = cms && container_verify(cms, params)
-		             ? container_encode(cms, output)
-		             : LIBSSIG_ERROR_CRYPTO;
-	}
-	output->ck_rv = raw.ck_rv;
-	libssig_signature_free(&raw);
+	CMS_ContentInfo* cms = container_create(x509, params, cades);
+	libssig_status
+	    status = cms ? container_sign(ctx, params, cms, cades, output)
+	                 : LIBSSIG_ERROR_CRYPTO;
 	CMS_ContentInfo_free(cms);
 	X509_free(x509);
 	return status;
+}
+
+libssig_status libssig_cms_sign(
+    const libssig_context*     ctx,
+    const libssig_sign_params* params,
+    const libssig_certificate* cert,
+    libssig_signature*         output
+) {
+	return detached_sign(ctx, params, cert, false, output);
+}
+
+libssig_status libssig_cades_sign(
+    const libssig_context*     ctx,
+    const libssig_sign_params* params,
+    const libssig_certificate* cert,
+    libssig_signature*         output
+) {
+	return detached_sign(ctx, params, cert, true, output);
 }

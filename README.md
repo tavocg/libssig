@@ -50,7 +50,7 @@ metadata extraction, not trust validation or a check of the private key's
 ## Build
 
 Requires CMake 3.16 or newer, a C99 compiler, `pkg-config`, and the development
-packages for `p11-kit-1` and OpenSSL (`libcrypto`).
+packages for `p11-kit-1` and OpenSSL 3.0 or newer (`libcrypto`).
 
 ```sh
 cmake -S . -B build

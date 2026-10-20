@@ -377,7 +377,7 @@ static bool sign_and_verify(
 
 	libssig_signature signature = {0};
 	libssig_status
-	    status = output_path ? libssig_cms_sign(ctx, params, cert, &signature)
+	    status = output_path ? libssig_cades_sign(ctx, params, cert, &signature)
 	                         : libssig_session_sign(ctx, params, &signature);
 	OPENSSL_cleanse(pin, sizeof(pin));
 	params->pin = NULL;
@@ -396,13 +396,13 @@ static bool sign_and_verify(
 	if (verified) {
 		printf(
 		    output_path
-		        ? "CMS detached verificado y guardado (%zu bytes).\n"
+		        ? "CAdES B-B detached verificado y guardado (%zu bytes).\n"
 		        : "Firma de prueba verificada correctamente (%zu bytes).\n",
 		    signature.len
 		);
 	} else {
 		fputs(
-		    output_path ? "No se pudo guardar el CMS verificado.\n"
+		    output_path ? "No se pudo guardar el CAdES verificado.\n"
 		                : "La firma no se pudo verificar con el certificado "
 		                  "seleccionado.\n",
 		    stderr

@@ -66,6 +66,7 @@ typedef struct {
 	size_t               data_len;
 	libssig_algo         algo;
 	libssig_hash         hash;
+	const char* mime_type; /* CAdES: NULL usa application/octet-stream. */
 } libssig_sign_params;
 
 typedef struct {
@@ -106,6 +107,16 @@ void           libssig_certificate_metadata_clear(libssig_certificate* cert);
  * El ID del certificado debe coincidir con params->id.
  * Liberar salida con libssig_signature_free antes de reutilizar. */
 libssig_status libssig_cms_sign(
+    const libssig_context*     ctx,
+    const libssig_sign_params* params,
+    const libssig_certificate* cert,
+    libssig_signature*         output
+);
+
+/* CAdES B-B DER detached: atributos firmados y signingCertificateV2.
+ * Mismas reglas de propiedad y límites que libssig_cms_sign.
+ * signingTime es hora declarada local, no un sello de tiempo de una TSA. */
+libssig_status libssig_cades_sign(
     const libssig_context*     ctx,
     const libssig_sign_params* params,
     const libssig_certificate* cert,

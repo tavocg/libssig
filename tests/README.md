@@ -54,7 +54,7 @@ Check authentication alone:
 ./build/tests/login-token 'pkcs11:token=...;serial=...'
 ```
 
-# Detached CMS file signing
+# Detached CAdES B-B file signing
 
 Sign a file using the same token, ID, algorithm and hash choices:
 
@@ -63,7 +63,7 @@ Sign a file using the same token, ID, algorithm and hash choices:
 ./build/tests/sign-file 'pkcs11:token=...;serial=...' 01 input.pdf output.p7s rsa-pss sha384
 ```
 
-The output is binary DER CMS SignedData with the signing certificate embedded;
+The output is binary DER CAdES B-B (CMS SignedData) with the signing certificate embedded;
 the original file stays separate. Existing output files are never overwritten.
 The tool verifies the signature before creating the output. It reads files into
 memory and accepts inputs up to `INT_MAX` bytes. Like `sign-token`, it uses the
@@ -76,7 +76,28 @@ openssl cms -verify -binary -inform DER -in output.p7s \
   -content input.pdf -noverify -out verified.pdf
 ```
 
-`-noverify` skips certificate trust validation; the content signature is still
-checked. Changing the input must make verification fail. This is basic detached
-CMS without signed attributes, timestamps, or a CAdES conformance claim. It does
-not embed a signature inside the PDF.
+`-noverify` skips certificate trust validation; the content signature and signed
+attributes are still checked. Changing the input must make verification fail.
+For an independent ESS certificate-binding check, use OpenSSL's CAdES mode with
+your trusted CA certificates and any intermediates:
+
+```sh
+openssl cms -verify -cades -binary -inform DER -in output.p7s \
+  -content input.pdf -CAfile trusted-ca.pem -certfile intermediate-ca.pem \
+  -out verified.pdf
+```
+
+CAdES output includes `contentType`, `messageDigest`, `signingTime`,
+`signingCertificateV2`, and the MIME type. The internal caller can set
+`params.mime_type`; the manual tool uses `application/octet-stream` rather than
+guessing from a filename. The certificate hash omits issuer/serial in its ESS
+identifier. The token signs canonical DER signed attributes; the document bytes
+are bound through `messageDigest`.
+
+`signingTime` is the local claimed time, not a trusted TSA timestamp. There is no
+timestamping, chain download, revocation checking or long-term validation data.
+It does not embed a signature inside a PDF. OpenSSL's `-cades` checks the ESS
+binding; it is not a complete ETSI baseline-profile validator. The implementation
+follows the mandatory B-B attributes and MIME recommendation in
+[ETSI EN 319 122-1 V1.3.1](https://www.etsi.org/deliver/etsi_en/319100_319199/31912201/01.03.01_60/en_31912201v010301p.pdf),
+clauses 5 and 6.3. The basic CMS function remains available internally.
