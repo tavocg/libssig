@@ -7,6 +7,7 @@ static void certificate_free(libssig_certificate* cert) {
 	free(cert->id);
 	free(cert->label);
 	free(cert->der);
+	libssig_certificate_metadata_clear(cert);
 	*cert = (libssig_certificate){0};
 }
 
@@ -126,7 +127,7 @@ static libssig_status certificate_read(
 		return status;
 	}
 
-	return attribute_read(
+	status = attribute_read(
 	    s,
 	    object,
 	    CKA_VALUE,
@@ -134,12 +135,15 @@ static libssig_status certificate_read(
 	    &cert->der_len,
 	    out_rv
 	);
+	return status == LIBSSIG_OK ? libssig_certificate_metadata_read(cert)
+	                            : status;
 }
 
 static libssig_status certificates_collect_one(
     libssig_session*          s,
     CK_OBJECT_HANDLE          object,
     libssig_certificate_list* certs,
+    unsigned int              options,
     CK_RV*                    out_rv
 ) {
 	libssig_certificate cert = {0};
@@ -147,6 +151,14 @@ static libssig_status certificates_collect_one(
 	if (status != LIBSSIG_OK) {
 		certificate_free(&cert);
 		return status;
+	}
+
+	if (!(options & LIBSSIG_CERTIFICATES_ALL) &&
+	    (cert.metadata_status != LIBSSIG_CERTIFICATE_METADATA_VALID ||
+	     !cert.key_usage_present ||
+	     !(cert.key_usage & LIBSSIG_KEY_USAGE_CONTENT_COMMITMENT))) {
+		certificate_free(&cert);
+		return LIBSSIG_OK;
 	}
 
 	if (certs->count >= SIZE_MAX / sizeof(*certs->items)) {
@@ -173,6 +185,7 @@ static libssig_status certificates_collect_one(
 libssig_status libssig_certificates_collect(
     libssig_session*          s,
     libssig_certificate_list* certs,
+    unsigned int              options,
     CK_RV*                    out_rv
 ) {
 	CK_OBJECT_CLASS     object_class = CKO_CERTIFICATE;
@@ -200,7 +213,7 @@ libssig_status libssig_certificates_collect(
 		if (!count) {
 			break;
 		}
-		status = certificates_collect_one(s, object, certs, out_rv);
+		status = certificates_collect_one(s, object, certs, options, out_rv);
 		if (status != LIBSSIG_OK) {
 			break;
 		}
@@ -223,7 +236,8 @@ libssig_status libssig_certificates_collect(
 libssig_status libssig_certificates(
     const libssig_context*    ctx,
     const libssig_token*      token,
-    libssig_certificate_list* certs
+    libssig_certificate_list* certs,
+    unsigned int              options
 ) {
 	if (!certs) {
 		return LIBSSIG_ERROR_ARGUMENT;
@@ -234,11 +248,15 @@ libssig_status libssig_certificates(
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
 
+	if (options & ~(unsigned int)LIBSSIG_CERTIFICATES_ALL) {
+		return LIBSSIG_ERROR_ARGUMENT;
+	}
+
 	libssig_session s = {0};
 	CK_RV           rv = CKR_OK;
 	libssig_status  status = libssig_session_open(ctx, token->uri, &s, &rv);
 	if (status == LIBSSIG_OK) {
-		status = libssig_certificates_collect(&s, certs, &rv);
+		status = libssig_certificates_collect(&s, certs, options, &rv);
 	}
 
 	CK_RV close_rv = libssig_session_close(&s);

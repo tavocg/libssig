@@ -47,9 +47,9 @@ add_test(NAME version COMMAND version_test)
 # Compile the implementation with a simulated module loader for lifecycle checks.
 add_executable(context_test context_test.c
     ../libssig/context.c ../libssig/tokens.c
-    ../libssig/certificates.c ../libssig/session.c)
+    ../libssig/certificates.c ../libssig/certificate_metadata.c ../libssig/session.c)
 target_include_directories(context_test PRIVATE ${PROJECT_SOURCE_DIR})
-target_link_libraries(context_test PRIVATE PkgConfig::P11_KIT)
+target_link_libraries(context_test PRIVATE PkgConfig::P11_KIT OpenSSL::Crypto)
 target_compile_options(context_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME context COMMAND context_test)
 
@@ -62,3 +62,14 @@ add_executable(sign_test sign_test.c)
 target_link_libraries(sign_test PRIVATE libssig::ssig PkgConfig::P11_KIT OpenSSL::Crypto)
 target_compile_options(sign_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME sign COMMAND sign_test)
+
+# Manual integration check: signs a fixed message with a real token and verifies it.
+add_executable(token_sign token_sign.c)
+target_link_libraries(token_sign PRIVATE libssig::ssig PkgConfig::P11_KIT OpenSSL::Crypto)
+target_compile_options(token_sign PRIVATE -Wall -Wextra -Wpedantic -Werror)
+set_target_properties(token_sign PROPERTIES OUTPUT_NAME sign-token)
+
+add_executable(certificate_metadata_test certificate_metadata_test.c)
+target_link_libraries(certificate_metadata_test PRIVATE libssig::ssig PkgConfig::P11_KIT OpenSSL::Crypto)
+target_compile_options(certificate_metadata_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME certificate_metadata COMMAND certificate_metadata_test)

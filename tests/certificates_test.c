@@ -107,7 +107,14 @@ int main(void) {
 	libssig_session          s = {.module = &module, .open = true};
 	libssig_certificate_list certs = {0};
 	CK_RV                    rv = CKR_OK;
-	CHECK(libssig_certificates_collect(&s, &certs, &rv) == LIBSSIG_OK);
+	CHECK(
+	    libssig_certificates_collect(
+	        &s,
+	        &certs,
+	        LIBSSIG_CERTIFICATES_ALL,
+	        &rv
+	    ) == LIBSSIG_OK
+	);
 	CHECK(finalize_count == 1 && certs.count == 2);
 	CHECK(certs.items[0].id_len == 3 && certs.items[0].id[1] == 0xff);
 	CHECK(!strcmp(certs.items[1].label, "test"));
@@ -115,45 +122,85 @@ int main(void) {
 	libssig_certificates_free(&certs);
 	libssig_certificates_free(&certs);
 	object_count = 0;
-	CHECK(libssig_certificates_collect(&s, &certs, &rv) == LIBSSIG_OK);
+	CHECK(
+	    libssig_certificates_collect(
+	        &s,
+	        &certs,
+	        LIBSSIG_CERTIFICATES_ALL,
+	        &rv
+	    ) == LIBSSIG_OK
+	);
 	CHECK(certs.count == 0);
 	object_count = 1;
 	attribute_missing = true;
-	CHECK(libssig_certificates_collect(&s, &certs, &rv) == LIBSSIG_OK);
+	CHECK(
+	    libssig_certificates_collect(
+	        &s,
+	        &certs,
+	        LIBSSIG_CERTIFICATES_ALL,
+	        &rv
+	    ) == LIBSSIG_OK
+	);
 	CHECK(certs.items[0].der == NULL && rv == CKR_OK);
 	libssig_certificates_free(&certs);
 	attribute_missing = false;
 	attribute_rv = CKR_DEVICE_ERROR;
 	CHECK(
-	    libssig_certificates_collect(&s, &certs, &rv) == LIBSSIG_ERROR_PKCS11
+	    libssig_certificates_collect(
+	        &s,
+	        &certs,
+	        LIBSSIG_CERTIFICATES_ALL,
+	        &rv
+	    ) == LIBSSIG_ERROR_PKCS11
 	);
 	CHECK(rv == CKR_DEVICE_ERROR && !certs.items);
 	attribute_rv = CKR_OK;
 	attribute_grows = true;
 	CHECK(
-	    libssig_certificates_collect(&s, &certs, &rv) == LIBSSIG_ERROR_PKCS11
+	    libssig_certificates_collect(
+	        &s,
+	        &certs,
+	        LIBSSIG_CERTIFICATES_ALL,
+	        &rv
+	    ) == LIBSSIG_ERROR_PKCS11
 	);
 	CHECK(rv == CKR_BUFFER_TOO_SMALL);
 	attribute_grows = false;
 	find_rv = CKR_DEVICE_REMOVED;
 	CHECK(
-	    libssig_certificates_collect(&s, &certs, &rv) == LIBSSIG_ERROR_PKCS11
+	    libssig_certificates_collect(
+	        &s,
+	        &certs,
+	        LIBSSIG_CERTIFICATES_ALL,
+	        &rv
+	    ) == LIBSSIG_ERROR_PKCS11
 	);
 	CHECK(rv == CKR_DEVICE_REMOVED);
 	find_rv = CKR_OK;
 	final_rv = CKR_GENERAL_ERROR;
 	CHECK(
-	    libssig_certificates_collect(&s, &certs, &rv) == LIBSSIG_ERROR_PKCS11
+	    libssig_certificates_collect(
+	        &s,
+	        &certs,
+	        LIBSSIG_CERTIFICATES_ALL,
+	        &rv
+	    ) == LIBSSIG_ERROR_PKCS11
 	);
 	CHECK(rv == CKR_GENERAL_ERROR && !certs.items);
 	CHECK(finalize_count == 7);
 	CK_FUNCTION_LIST*           modules[] = {&module, NULL};
 	struct libssig_context_impl impl = {.modules = modules};
 	libssig_context             ctx = {.impl = &impl};
-	CHECK(libssig_certificates(&ctx, NULL, &certs) == LIBSSIG_ERROR_ARGUMENT);
+	CHECK(
+	    libssig_certificates(&ctx, NULL, &certs, 0) == LIBSSIG_ERROR_ARGUMENT
+	);
 	libssig_token token = {0};
-	CHECK(libssig_certificates(&ctx, &token, &certs) == LIBSSIG_ERROR_ARGUMENT);
-	CHECK(libssig_certificates(&ctx, &token, NULL) == LIBSSIG_ERROR_ARGUMENT);
+	CHECK(
+	    libssig_certificates(&ctx, &token, &certs, 0) == LIBSSIG_ERROR_ARGUMENT
+	);
+	CHECK(
+	    libssig_certificates(&ctx, &token, NULL, 0) == LIBSSIG_ERROR_ARGUMENT
+	);
 	libssig_certificates_free(NULL);
 	return 0;
 }

@@ -48,6 +48,31 @@ typedef struct {
 	unsigned char minor;
 } libssig_token_version;
 
+/* Arreglo dinámico; cadenas propiedad de la biblioteca.
+ * Su memoria se libera junto con el resultado que lo contiene. */
+typedef struct {
+	const char** items;
+	size_t       count;
+} libssig_string_list;
+
+typedef enum {
+	LIBSSIG_KEY_USAGE_DIGITAL_SIGNATURE = 1u << 0,
+	LIBSSIG_KEY_USAGE_CONTENT_COMMITMENT = 1u << 1,
+	LIBSSIG_KEY_USAGE_KEY_ENCIPHERMENT = 1u << 2,
+	LIBSSIG_KEY_USAGE_DATA_ENCIPHERMENT = 1u << 3,
+	LIBSSIG_KEY_USAGE_KEY_AGREEMENT = 1u << 4,
+	LIBSSIG_KEY_USAGE_KEY_CERT_SIGN = 1u << 5,
+	LIBSSIG_KEY_USAGE_CRL_SIGN = 1u << 6,
+	LIBSSIG_KEY_USAGE_ENCIPHER_ONLY = 1u << 7,
+	LIBSSIG_KEY_USAGE_DECIPHER_ONLY = 1u << 8,
+} libssig_key_usage;
+
+typedef enum {
+	LIBSSIG_CERTIFICATE_METADATA_UNAVAILABLE,
+	LIBSSIG_CERTIFICATE_METADATA_VALID,
+	LIBSSIG_CERTIFICATE_METADATA_INVALID,
+} libssig_certificate_metadata_status;
+
 /* Memoria del resultado de certificados; liberar con libssig_certificates_free.
  */
 typedef struct {
@@ -63,6 +88,17 @@ typedef struct {
 	/* Certificado X.509; NULL si no está disponible localmente. */
 	unsigned char* der;
 	size_t         der_len;
+
+	/* Extracción de metadatos; no valida confianza, vigencia ni revocación. */
+	libssig_certificate_metadata_status metadata_status;
+	bool                                key_usage_present;
+	unsigned int                        key_usage;
+	libssig_string_list                 key_usage_names;
+	bool                                extended_key_usage_present;
+	libssig_string_list
+	     extended_key_usage; /* OIDs numéricos, incluidos desconocidos. */
+	bool certificate_policies_present;
+	libssig_string_list certificate_policies; /* Solo OIDs, sin qualifiers. */
 } libssig_certificate;
 
 typedef struct {
@@ -70,13 +106,6 @@ typedef struct {
 	size_t               count;
 	unsigned long        ck_rv;
 } libssig_certificate_list;
-
-/* Arreglo dinámico; cadenas constantes propiedad de la biblioteca.
- * Su memoria se libera junto con el resultado que lo contiene. */
-typedef struct {
-	const char** items;
-	size_t       count;
-} libssig_string_list;
 
 /* Las cadenas pertenecen al resultado y se liberan con libssig_tokens_free. */
 typedef struct {
@@ -146,10 +175,20 @@ libssig_status libssig_tokens(
 
 void libssig_tokens_free(libssig_token_list* tokens);
 
+typedef enum {
+	LIBSSIG_CERTIFICATES_ALL = 1u << 0,
+} libssig_certificates_options;
+
+/* 0: solo certificados con Key Usage contentCommitment y metadatos válidos.
+ * ALL incluye usos distintos, desconocidos y DER ausente o inválido.
+ * No requiere PIN ni comprueba CKA_SIGN; esa capacidad se valida al firmar.
+ * Requiere contexto abierto; liberar la salida antes de reutilizarla.
+ * Bits desconocidos devuelven LIBSSIG_ERROR_ARGUMENT. */
 libssig_status libssig_certificates(
     const libssig_context*    ctx,
     const libssig_token*      token,
-    libssig_certificate_list* certs
+    libssig_certificate_list* certs,
+    unsigned int              options
 );
 
 void libssig_certificates_free(libssig_certificate_list* certs);

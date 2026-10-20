@@ -34,6 +34,19 @@ libssig_tokens(&ctx, &tokens, 0);                  /* Hardware only. */
 libssig_tokens(&ctx, &tokens, LIBSSIG_TOKENS_ALL); /* All present tokens. */
 ```
 
+Certificate queries default to certificates declaring `contentCommitment`:
+
+```c
+libssig_certificates(&ctx, &token, &certs, 0);
+/* Free certs before another query. */
+libssig_certificates_free(&certs);
+libssig_certificates(&ctx, &token, &certs, LIBSSIG_CERTIFICATES_ALL);
+```
+
+Results include Key Usage, numeric EKU OIDs and certificate policy OIDs. This is
+metadata extraction, not trust validation or a check of the private key's
+`CKA_SIGN` capability. All metadata is freed by `libssig_certificates_free()`.
+
 ## Build
 
 Requires CMake 3.16 or newer, a C99 compiler, `pkg-config`, and the development

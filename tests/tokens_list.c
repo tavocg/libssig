@@ -76,6 +76,43 @@ static void hex_print(const unsigned char* data, size_t len) {
 	putchar('"');
 }
 
+static void string_list_print(const libssig_string_list* list) {
+	putchar('[');
+	for (size_t i = 0; i < list->count; ++i) {
+		if (i) {
+			fputs(", ", stdout);
+		}
+		json_string_print(list->items[i]);
+	}
+	putchar(']');
+}
+
+static void certificate_metadata_print(const libssig_certificate* cert) {
+	const char* statuses[] = {"unavailable", "valid", "invalid"};
+	printf(", \"metadata_status\": ");
+	json_string_print(statuses[cert->metadata_status]);
+	fputs(", \"key_usage\": ", stdout);
+	if (cert->key_usage_present) {
+		printf("%u", cert->key_usage);
+	} else {
+		fputs("null", stdout);
+	}
+	fputs(", \"key_usage_names\": ", stdout);
+	string_list_print(&cert->key_usage_names);
+	fputs(", \"extended_key_usage\": ", stdout);
+	if (cert->extended_key_usage_present) {
+		string_list_print(&cert->extended_key_usage);
+	} else {
+		fputs("null", stdout);
+	}
+	fputs(", \"certificate_policies\": ", stdout);
+	if (cert->certificate_policies_present) {
+		string_list_print(&cert->certificate_policies);
+	} else {
+		fputs("null", stdout);
+	}
+}
+
 static void certificates_print(const libssig_certificate_list* certs) {
 	fputs("      \"certificates\": [", stdout);
 	for (size_t i = 0; i < certs->count; ++i) {
@@ -93,7 +130,9 @@ static void certificates_print(const libssig_certificate_list* certs) {
 		}
 		printf(", \"label_len\": %zu, \"der_hex\": ", cert->label_len);
 		hex_print(cert->der, cert->der_len);
-		printf(", \"der_len\": %zu}", cert->der_len);
+		printf(", \"der_len\": %zu", cert->der_len);
+		certificate_metadata_print(cert);
+		putchar('}');
 	}
 	puts("]");
 }
@@ -150,7 +189,15 @@ static void token_print(
 	fputs("    }", stdout);
 }
 
-int main(void) {
+int main(int argc, char** argv) {
+	unsigned int cert_options = 0;
+	if (argc == 2 && !strcmp(argv[1], "--all-certificates")) {
+		cert_options = LIBSSIG_CERTIFICATES_ALL;
+	} else if (argc != 1) {
+		fprintf(stderr, "Uso: %s [--all-certificates]\n", argv[0]);
+		return 1;
+	}
+
 	libssig_context ctx = {0};
 	libssig_status  status = libssig_context_open(&ctx);
 	if (status != LIBSSIG_OK) {
@@ -174,7 +221,12 @@ int main(void) {
 	printf("{\n  \"count\": %zu,\n  \"tokens\": [\n", tokens.count);
 	for (size_t i = 0; i < tokens.count; ++i) {
 		libssig_certificate_list certs = {0};
-		status = libssig_certificates(&ctx, &tokens.items[i], &certs);
+		status = libssig_certificates(
+		    &ctx,
+		    &tokens.items[i],
+		    &certs,
+		    cert_options
+		);
 		if (status != LIBSSIG_OK) {
 			fprintf(
 			    stderr,

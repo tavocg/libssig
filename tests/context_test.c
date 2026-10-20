@@ -133,7 +133,9 @@ int main(void) {
 	    libssig_tokens(&ctx, &tokens, LIBSSIG_TOKENS_ALL) ==
 	    LIBSSIG_ERROR_ARGUMENT
 	);
-	CHECK(libssig_certificates(&ctx, &token, &certs) == LIBSSIG_ERROR_ARGUMENT);
+	CHECK(
+	    libssig_certificates(&ctx, &token, &certs, 0) == LIBSSIG_ERROR_ARGUMENT
+	);
 
 	fail_load = true;
 	CHECK(libssig_context_open(&ctx) == LIBSSIG_ERROR_MODULES && !ctx.impl);
@@ -148,7 +150,8 @@ int main(void) {
 		CHECK(libssig_tokens(&ctx, &tokens, LIBSSIG_TOKENS_ALL) == LIBSSIG_OK);
 		CHECK(tokens.count == 1);
 		CHECK(
-		    libssig_certificates(&ctx, &tokens.items[0], &certs) == LIBSSIG_OK
+		    libssig_certificates(&ctx, &tokens.items[0], &certs, 0) ==
+		    LIBSSIG_OK
 		);
 		CHECK(certs.count == 0 && certs.ck_rv == CKR_OK);
 		libssig_certificates_free(&certs);
@@ -180,7 +183,9 @@ int main(void) {
 	libssig_tokens_free(&tokens);
 	libssig_context_close(&ctx);
 	CHECK(release_count == 2);
-	CHECK(libssig_certificates(&ctx, &token, &certs) == LIBSSIG_ERROR_ARGUMENT);
+	CHECK(
+	    libssig_certificates(&ctx, &token, &certs, 0) == LIBSSIG_ERROR_ARGUMENT
+	);
 
 	CHECK(libssig_context_open(&ctx) == LIBSSIG_OK);
 	libssig_context_close(&ctx);
