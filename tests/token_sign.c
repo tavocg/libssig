@@ -1,4 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
+#include <errno.h>
+#include <fcntl.h>
 #include <libssig/internal.h>
 #include <limits.h>
 #include <openssl/crypto.h>
@@ -31,16 +33,21 @@ static void error_print(
 }
 
 static void usage_print(const char* program) {
+#ifdef LIBSSIG_CMS_FILE
+	fprintf(
+	    stderr,
+	    "Uso: %s URI ID_HEX INPUT OUTPUT.p7s [rsa-pkcs|rsa-pss|ecdsa] "
+	    "[sha256|sha384|sha512]\n",
+	    program
+	);
+#else
 	fprintf(
 	    stderr,
 	    "Uso: %s URI ID_HEX [rsa-pkcs|rsa-pss|ecdsa] [sha256|sha384|sha512]\n",
 	    program
 	);
-	fputs(
-	    "Por defecto: rsa-pkcs y sha256. ID_HEX es el CKA_ID binario en "
-	    "hexadecimal, sin separadores.\n",
-	    stderr
-	);
+#endif
+	fputs("Por defecto: rsa-pkcs y sha256. ID_HEX sin separadores.\n", stderr);
 }
 
 static int hex_digit(char value) {
@@ -82,13 +89,18 @@ static unsigned char* id_parse(const char* text, size_t* out_len) {
 static bool options_parse(int argc, char** argv, libssig_sign_params* params) {
 	const char* algorithms[] = {"rsa-pkcs", "rsa-pss", "ecdsa"};
 	const char* hashes[] = {"sha256", "sha384", "sha512"};
-	if (argc < 3 || argc > 5) {
+#ifdef LIBSSIG_CMS_FILE
+	const int first = 5;
+#else
+	const int first = 3;
+#endif
+	if (argc < first || argc > first + 2) {
 		return false;
 	}
 
-	if (argc > 3) {
+	if (argc > first) {
 		size_t i = 0;
-		while (i < 3 && strcasecmp(argv[3], algorithms[i])) {
+		while (i < 3 && strcasecmp(argv[first], algorithms[i])) {
 			++i;
 		}
 		if (i == 3) {
@@ -97,9 +109,9 @@ static bool options_parse(int argc, char** argv, libssig_sign_params* params) {
 		params->algo = (libssig_algo)i;
 	}
 
-	if (argc > 4) {
+	if (argc > first + 1) {
 		size_t i = 0;
-		while (i < 3 && strcasecmp(argv[4], hashes[i])) {
+		while (i < 3 && strcasecmp(argv[first + 1], hashes[i])) {
 			++i;
 		}
 		if (i == 3) {
@@ -290,10 +302,72 @@ static bool signature_verify(
 	return verified;
 }
 
+static bool output_write(const char* path, const libssig_signature* output) {
+	int fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0600);
+	if (fd < 0) {
+		perror(path);
+		return false;
+	}
+
+	size_t offset = 0;
+	while (offset < output->len) {
+		ssize_t len = write(fd, output->data + offset, output->len - offset);
+		if (len < 0 && errno == EINTR) {
+			continue;
+		}
+		if (len <= 0) {
+			break;
+		}
+		offset += (size_t)len;
+	}
+	bool ok = close(fd) == 0 && offset == output->len;
+	if (!ok) {
+		fputs("No se pudo escribir la firma completa.\n", stderr);
+		unlink(path);
+	}
+	return ok;
+}
+
+#ifdef LIBSSIG_CMS_FILE
+static unsigned char* input_read(const char* path, size_t* out_len) {
+	FILE* file = fopen(path, "rb");
+	if (!file) {
+		perror(path);
+		return NULL;
+	}
+
+	unsigned char* data = NULL;
+	if (fseek(file, 0, SEEK_END) == 0) {
+		long len = ftell(file);
+		if (len >= 0 && len <= INT_MAX && fseek(file, 0, SEEK_SET) == 0) {
+			data = malloc(len ? (size_t)len : 1);
+			if (data && (fread(data, 1, (size_t)len, file) != (size_t)len ||
+			             ferror(file))) {
+				free(data);
+				data = NULL;
+			}
+			if (data) {
+				*out_len = (size_t)len;
+			}
+		}
+	}
+	if (fclose(file) != 0) {
+		free(data);
+		data = NULL;
+	}
+	if (!data) {
+		fputs("No se pudo leer el archivo (máximo INT_MAX bytes).\n", stderr);
+	}
+	return data;
+}
+#endif
+
 static bool sign_and_verify(
-    const libssig_context* ctx,
-    libssig_sign_params*   params,
-    EVP_PKEY*              key
+    const libssig_context*     ctx,
+    libssig_sign_params*       params,
+    EVP_PKEY*                  key,
+    const libssig_certificate* cert,
+    const char*                output_path
 ) {
 	char pin[1024] = {0};
 	if (!pin_read(ctx, params, pin, sizeof(pin))) {
@@ -302,25 +376,35 @@ static bool sign_and_verify(
 	}
 
 	libssig_signature signature = {0};
-	libssig_status    status = libssig_session_sign(ctx, params, &signature);
+	libssig_status
+	    status = output_path ? libssig_cms_sign(ctx, params, cert, &signature)
+	                         : libssig_session_sign(ctx, params, &signature);
 	OPENSSL_cleanse(pin, sizeof(pin));
 	params->pin = NULL;
 	params->pin_len = 0;
 	if (status != LIBSSIG_OK) {
 		error_print("Firmar", status, signature.ck_rv);
+		if (status == LIBSSIG_ERROR_CRYPTO) {
+			ERR_print_errors_fp(stderr);
+		}
 		libssig_signature_free(&signature);
 		return false;
 	}
 
-	bool verified = signature_verify(key, params, &signature);
+	bool verified = output_path ? output_write(output_path, &signature)
+	                            : signature_verify(key, params, &signature);
 	if (verified) {
 		printf(
-		    "Firma de prueba verificada correctamente (%zu bytes).\n",
+		    output_path
+		        ? "CMS detached verificado y guardado (%zu bytes).\n"
+		        : "Firma de prueba verificada correctamente (%zu bytes).\n",
 		    signature.len
 		);
 	} else {
 		fputs(
-		    "La firma no se pudo verificar con el certificado seleccionado.\n",
+		    output_path ? "No se pudo guardar el CMS verificado.\n"
+		                : "La firma no se pudo verificar con el certificado "
+		                  "seleccionado.\n",
 		    stderr
 		);
 		ERR_print_errors_fp(stderr);
@@ -329,7 +413,11 @@ static bool sign_and_verify(
 	return verified;
 }
 
-static bool test_run(const libssig_context* ctx, libssig_sign_params* params) {
+static bool test_run(
+    const libssig_context* ctx,
+    libssig_sign_params*   params,
+    const char*            output_path
+) {
 	libssig_certificate_list certs = {0};
 	libssig_status           status = libssig_certificates(
         ctx,
@@ -345,7 +433,7 @@ static bool test_run(const libssig_context* ctx, libssig_sign_params* params) {
 
 	const libssig_certificate* cert = certificate_find(&certs, params);
 	EVP_PKEY*                  key = cert ? certificate_key_get(cert) : NULL;
-	bool verified = key && sign_and_verify(ctx, params, key);
+	bool verified = key && sign_and_verify(ctx, params, key, cert, output_path);
 	EVP_PKEY_free(key);
 	libssig_certificates_free(&certs);
 	return verified;
@@ -371,6 +459,16 @@ int main(int argc, char** argv) {
 		fputs("ID_HEX inválido o memoria insuficiente.\n", stderr);
 		return 1;
 	}
+	const char* output_path = NULL;
+#ifdef LIBSSIG_CMS_FILE
+	unsigned char* input = input_read(argv[3], &params.data_len);
+	if (!input) {
+		free(id);
+		return 1;
+	}
+	params.data = input;
+	output_path = argv[4];
+#endif
 	libssig_token token = {.uri = argv[1]};
 	params.token = &token;
 	params.id = id;
@@ -378,11 +476,14 @@ int main(int argc, char** argv) {
 	libssig_status  status = libssig_context_open(&ctx);
 	bool            verified = false;
 	if (status == LIBSSIG_OK) {
-		verified = test_run(&ctx, &params);
+		verified = test_run(&ctx, &params, output_path);
 	} else {
 		error_print("Cargar módulos", status, CKR_OK);
 	}
 	libssig_context_close(&ctx);
 	free(id);
+#ifdef LIBSSIG_CMS_FILE
+	free(input);
+#endif
 	return verified ? 0 : 1;
 }

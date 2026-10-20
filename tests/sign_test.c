@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include <libssig/internal.h>
+#include <openssl/cms.h>
 #include <openssl/ec.h>
 #include <openssl/evp.h>
 #include <openssl/rsa.h>
@@ -345,6 +346,172 @@ static int signature_verify(
 	return ok;
 }
 
+static const char* fixture_directory;
+
+static X509* cms_certificate_create(EVP_PKEY* key) {
+	X509* cert = X509_new();
+	if (!cert) {
+		return NULL;
+	}
+	bool ok = X509_set_version(cert, 2) &&
+	          ASN1_INTEGER_set(X509_get_serialNumber(cert), 2) &&
+	          X509_gmtime_adj(X509_getm_notBefore(cert), 0) &&
+	          X509_gmtime_adj(X509_getm_notAfter(cert), 3600) &&
+	          X509_set_pubkey(cert, key);
+	X509_NAME* name = X509_get_subject_name(cert);
+	ok = ok &&
+	     X509_NAME_add_entry_by_txt(
+	         name,
+	         "CN",
+	         MBSTRING_ASC,
+	         (const unsigned char*)"CMS test",
+	         -1,
+	         -1,
+	         0
+	     ) &&
+	     X509_set_issuer_name(cert, name) &&
+	     X509_sign(cert, key, EVP_sha256()) > 0;
+	if (!ok) {
+		X509_free(cert);
+		return NULL;
+	}
+	return cert;
+}
+
+static int cms_verify(
+    const libssig_signature* output,
+    const unsigned char*     data,
+    size_t                   len
+) {
+	const unsigned char* cursor = output->data;
+	CMS_ContentInfo*     cms = d2i_CMS_ContentInfo(
+        NULL,
+        &cursor,
+        (long)output->len
+    );
+	CHECK(
+	    cms && cursor == output->data + output->len && CMS_is_detached(cms) == 1
+	);
+	STACK_OF(CMS_SignerInfo)* signers = CMS_get0_SignerInfos(cms);
+	CHECK(sk_CMS_SignerInfo_num(signers) == 1);
+	CHECK(CMS_signed_get_attr_count(sk_CMS_SignerInfo_value(signers, 0)) < 0);
+	STACK_OF(X509)* certs = CMS_get1_certs(cms);
+	CHECK(sk_X509_num(certs) == 1);
+	sk_X509_pop_free(certs, X509_free);
+	BIO* input = BIO_new_mem_buf(data, (int)len);
+	BIO* sink = BIO_new(BIO_s_null());
+	int  verified = CMS_verify(
+        cms,
+        NULL,
+        NULL,
+        input,
+        sink,
+        CMS_BINARY | CMS_NO_SIGNER_CERT_VERIFY
+    );
+	BIO_free(input);
+	BIO_free(sink);
+	CMS_ContentInfo_free(cms);
+	return verified == 1 ? 0 : -1;
+}
+
+static int fixture_write(
+    const char*          name,
+    const unsigned char* data,
+    size_t               len
+) {
+	if (!fixture_directory) {
+		return 0;
+	}
+	char path[4096];
+	int  size = snprintf(path, sizeof(path), "%s/%s", fixture_directory, name);
+	CHECK(size > 0 && (size_t)size < sizeof(path));
+	FILE* file = fopen(path, "wb");
+	CHECK(file);
+	bool written = fwrite(data, 1, len, file) == len;
+	int  closed = fclose(file);
+	CHECK(written && closed == 0);
+	return 0;
+}
+
+static int cms_check(const libssig_context* ctx, libssig_sign_params* params) {
+	X509* x509 = cms_certificate_create(rsa);
+	CHECK(x509);
+	unsigned char* der = NULL;
+	int            len = i2d_X509(x509, &der);
+	X509_free(x509);
+	CHECK(len > 0);
+	libssig_certificate cert = {
+	    .id = (unsigned char*)params->id,
+	    .id_len = params->id_len,
+	    .der = der,
+	    .der_len = (size_t)len
+	};
+	libssig_signature output = {0};
+	CHECK(libssig_cms_sign(ctx, params, &cert, &output) == LIBSSIG_OK);
+	CHECK(cms_verify(&output, params->data, params->data_len) == 0);
+	const unsigned char altered[] = {0, 0xff, 43};
+	CHECK(cms_verify(&output, altered, sizeof(altered)) == -1);
+	char name[64];
+	snprintf(name, sizeof(name), "cms-%d-%d.p7s", params->algo, params->hash);
+	CHECK(fixture_write(name, output.data, output.len) == 0);
+	CHECK(fixture_write("input.bin", params->data, params->data_len) == 0);
+	CHECK(fixture_write("altered.bin", altered, sizeof(altered)) == 0);
+	libssig_signature_free(&output);
+
+	size_t id_len = cert.id_len;
+	cert.id_len = 0;
+	CHECK(
+	    libssig_cms_sign(ctx, params, &cert, &output) == LIBSSIG_ERROR_ARGUMENT
+	);
+	cert.id_len = id_len;
+	if (params->algo == LIBSSIG_ALGO_RSA_PKCS &&
+	    params->hash == LIBSSIG_HASH_SHA256) {
+		sign_rv = CKR_DEVICE_ERROR;
+		CHECK(
+		    libssig_cms_sign(ctx, params, &cert, &output) ==
+		    LIBSSIG_ERROR_PKCS11
+		);
+		CHECK(output.ck_rv == CKR_DEVICE_ERROR && !output.data && !output.len);
+		sign_rv = CKR_OK;
+	}
+	if (params->algo == LIBSSIG_ALGO_RSA_PKCS &&
+	    params->hash == LIBSSIG_HASH_SHA256) {
+		const unsigned char* saved_data = params->data;
+		size_t               saved_len = params->data_len;
+		params->data = NULL;
+		params->data_len = 0;
+		CHECK(libssig_cms_sign(ctx, params, &cert, &output) == LIBSSIG_OK);
+		CHECK(cms_verify(&output, (const unsigned char*)"", 0) == 0);
+		libssig_signature_free(&output);
+		params->data = saved_data;
+		params->data_len = saved_len;
+
+		EVP_PKEY*     wrong_key = NULL;
+		EVP_PKEY_CTX* gen = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
+		CHECK(gen && EVP_PKEY_keygen_init(gen) == 1);
+		CHECK(EVP_PKEY_CTX_set_rsa_keygen_bits(gen, 2048) == 1);
+		CHECK(EVP_PKEY_keygen(gen, &wrong_key) == 1);
+		EVP_PKEY_CTX_free(gen);
+		X509* wrong = cms_certificate_create(wrong_key);
+		CHECK(wrong);
+		unsigned char* wrong_der = NULL;
+		int            wrong_len = i2d_X509(wrong, &wrong_der);
+		CHECK(wrong_len > 0);
+		cert.der = wrong_der;
+		cert.der_len = (size_t)wrong_len;
+		CHECK(
+		    libssig_cms_sign(ctx, params, &cert, &output) ==
+		    LIBSSIG_ERROR_CRYPTO
+		);
+		CHECK(!output.data && !output.len);
+		OPENSSL_free(wrong_der);
+		X509_free(wrong);
+		EVP_PKEY_free(wrong_key);
+	}
+	OPENSSL_free(der);
+	return 0;
+}
+
 static int algorithms_check(
     const libssig_context* ctx,
     libssig_sign_params*   params
@@ -395,6 +562,7 @@ static int algorithms_check(
 			    7
 			));
 			libssig_signature_free(&signature);
+			CHECK(cms_check(ctx, params) == 0);
 		}
 	}
 	rsa = saved_rsa;
@@ -417,7 +585,8 @@ static int algorithms_check(
 	return 0;
 }
 
-int main(void) {
+int main(int argc, char** argv) {
+	fixture_directory = argc == 2 ? argv[1] : NULL;
 	digest = EVP_sha256();
 	EVP_PKEY_CTX* keygen = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
 	CHECK(keygen);

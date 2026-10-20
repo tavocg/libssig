@@ -53,3 +53,30 @@ Check authentication alone:
 ```sh
 ./build/tests/login-token 'pkcs11:token=...;serial=...'
 ```
+
+# Detached CMS file signing
+
+Sign a file using the same token, ID, algorithm and hash choices:
+
+```sh
+./build/tests/sign-file 'pkcs11:token=...;serial=...' 01 input.pdf output.p7s
+./build/tests/sign-file 'pkcs11:token=...;serial=...' 01 input.pdf output.p7s rsa-pss sha384
+```
+
+The output is binary DER CMS SignedData with the signing certificate embedded;
+the original file stays separate. Existing output files are never overwritten.
+The tool verifies the signature before creating the output. It reads files into
+memory and accepts inputs up to `INT_MAX` bytes. Like `sign-token`, it uses the
+internal API and requires an interactive token when authentication is needed.
+
+Verify independently:
+
+```sh
+openssl cms -verify -binary -inform DER -in output.p7s \
+  -content input.pdf -noverify -out verified.pdf
+```
+
+`-noverify` skips certificate trust validation; the content signature is still
+checked. Changing the input must make verification fail. This is basic detached
+CMS without signed attributes, timestamps, or a CAdES conformance claim. It does
+not embed a signature inside the PDF.

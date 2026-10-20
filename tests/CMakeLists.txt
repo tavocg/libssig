@@ -73,3 +73,20 @@ add_executable(certificate_metadata_test certificate_metadata_test.c)
 target_link_libraries(certificate_metadata_test PRIVATE libssig::ssig PkgConfig::P11_KIT OpenSSL::Crypto)
 target_compile_options(certificate_metadata_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME certificate_metadata COMMAND certificate_metadata_test)
+
+# Manual detached CMS signing using a real token.
+add_executable(token_sign_file token_sign.c)
+target_compile_definitions(token_sign_file PRIVATE LIBSSIG_CMS_FILE=1)
+target_link_libraries(token_sign_file PRIVATE libssig::ssig PkgConfig::P11_KIT OpenSSL::Crypto)
+target_compile_options(token_sign_file PRIVATE -Wall -Wextra -Wpedantic -Werror)
+set_target_properties(token_sign_file PROPERTIES OUTPUT_NAME sign-file)
+
+find_program(OPENSSL_EXECUTABLE openssl)
+if(OPENSSL_EXECUTABLE)
+    add_test(NAME cms_openssl
+        COMMAND ${CMAKE_COMMAND}
+            "-DSIGN_TEST=$<TARGET_FILE:sign_test>"
+            "-DOPENSSL=${OPENSSL_EXECUTABLE}"
+            "-DFIXTURES=${CMAKE_CURRENT_BINARY_DIR}/cms-fixtures"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cms_verify.cmake)
+endif()

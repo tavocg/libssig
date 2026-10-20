@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+file(MAKE_DIRECTORY "${FIXTURES}")
+execute_process(COMMAND "${SIGN_TEST}" "${FIXTURES}" RESULT_VARIABLE result)
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "Could not generate token-backed CMS fixtures: ${result}")
+endif()
+
+foreach(algo RANGE 0 2)
+    foreach(hash RANGE 0 2)
+        set(signature "${FIXTURES}/cms-${algo}-${hash}.p7s")
+        execute_process(COMMAND "${OPENSSL}" cms -verify -binary -inform DER
+            -in "${signature}" -content "${FIXTURES}/input.bin" -noverify
+            -out "${FIXTURES}/verified.bin"
+            RESULT_VARIABLE result ERROR_VARIABLE error)
+        if(NOT result EQUAL 0)
+            message(FATAL_ERROR "OpenSSL rejected ${signature}: ${error}")
+        endif()
+        file(SHA256 "${FIXTURES}/input.bin" input_hash)
+        file(SHA256 "${FIXTURES}/verified.bin" output_hash)
+        if(NOT input_hash STREQUAL output_hash)
+            message(FATAL_ERROR "Verified content differs from the original")
+        endif()
+        execute_process(COMMAND "${OPENSSL}" cms -verify -binary -inform DER
+            -in "${signature}" -content "${FIXTURES}/altered.bin" -noverify
+            -out "${FIXTURES}/rejected.bin"
+            RESULT_VARIABLE result ERROR_VARIABLE error)
+        if(result EQUAL 0)
+            message(FATAL_ERROR "OpenSSL accepted altered content for ${signature}")
+        endif()
+    endforeach()
+endforeach()
