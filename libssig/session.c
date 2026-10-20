@@ -30,6 +30,7 @@ static libssig_status slot_match(
 	if (s->module) {
 		return LIBSSIG_ERROR_AMBIGUOUS;
 	}
+
 	s->module = module;
 	s->slot = slot;
 	return LIBSSIG_OK;
@@ -54,10 +55,12 @@ static libssig_status module_token_find(
 	if (slot_count > SIZE_MAX / sizeof(CK_SLOT_ID)) {
 		return LIBSSIG_ERROR_MEMORY;
 	}
+
 	CK_SLOT_ID* slots = malloc((size_t)slot_count * sizeof(*slots));
 	if (!slots) {
 		return LIBSSIG_ERROR_MEMORY;
 	}
+
 	*out_rv = module->C_GetSlotList(CK_TRUE, slots, &slot_count);
 	libssig_status status = LIBSSIG_ERROR_PKCS11;
 	if (*out_rv == CKR_OK) {
@@ -83,6 +86,7 @@ static libssig_status token_select(
 	if (!uri) {
 		return LIBSSIG_ERROR_MEMORY;
 	}
+
 	int uri_status = p11_kit_uri_parse(uri_text, P11_KIT_URI_FOR_TOKEN, uri);
 
 	libssig_status status = LIBSSIG_ERROR_URI;
@@ -92,6 +96,7 @@ static libssig_status token_select(
 		p11_kit_uri_free(uri);
 		return status;
 	}
+
 	status = LIBSSIG_OK;
 	for (size_t i = 0; ctx->impl->modules[i]; ++i) {
 		status = module_token_find(ctx->impl->modules[i], uri, s, out_rv);
@@ -116,12 +121,14 @@ libssig_status libssig_session_open(
 	    s->open) {
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
+
 	*out_rv = CKR_OK;
 	libssig_session pending = {0};
 	libssig_status  status = token_select(ctx, uri, &pending, out_rv);
 	if (status != LIBSSIG_OK) {
 		return status;
 	}
+
 	*out_rv = pending.module->C_OpenSession(
 	    pending.slot,
 	    CKF_SERIAL_SESSION,
@@ -132,6 +139,7 @@ libssig_status libssig_session_open(
 	if (*out_rv != CKR_OK) {
 		return LIBSSIG_ERROR_PKCS11;
 	}
+
 	pending.open = true;
 	*s = pending;
 	return LIBSSIG_OK;
@@ -146,6 +154,7 @@ libssig_status libssig_session_login(
 	if (!out_rv) {
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
+
 	*out_rv = CKR_OK;
 	if (!s || !s->open || !s->module || (!pin && pin_len) ||
 	    pin_len > ULONG_MAX) {
@@ -182,6 +191,7 @@ CK_RV libssig_session_close(libssig_session* s) {
 	if (!s || !s->open) {
 		return CKR_OK;
 	}
+
 	CK_RV rv = s->module->C_CloseSession(s->handle);
 	*s = (libssig_session){0};
 	return rv;

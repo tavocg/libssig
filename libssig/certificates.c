@@ -40,7 +40,6 @@ static libssig_status attribute_read(
 	*out_len = 0;
 	CK_ATTRIBUTE attribute = {type, NULL, 0};
 	*out_rv = s->module->C_GetAttributeValue(s->handle, object, &attribute, 1);
-
 	if (attribute_is_unavailable(*out_rv)) {
 		*out_rv = CKR_OK;
 		return LIBSSIG_OK;
@@ -108,7 +107,6 @@ static libssig_status certificate_read(
 	    &cert->id_len,
 	    out_rv
 	);
-
 	if (status != LIBSSIG_OK) {
 		return status;
 	}
@@ -124,7 +122,6 @@ static libssig_status certificate_read(
 	);
 
 	cert->label = (char*)label;
-
 	if (status != LIBSSIG_OK) {
 		return status;
 	}

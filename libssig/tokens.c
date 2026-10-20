@@ -19,6 +19,7 @@ static void string_list_free(libssig_string_list* names) {
 	if (!names) {
 		return;
 	}
+
 	free(names->items);
 	*names = (libssig_string_list){0};
 }
@@ -30,6 +31,7 @@ static libssig_status token_flags_names(
 	if (!names) {
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
+
 	*names = (libssig_string_list){0};
 	static const struct {
 		unsigned long value;
@@ -229,6 +231,7 @@ static libssig_status token_from_info(
 	    token_info->firmwareVersion.major,
 	    token_info->firmwareVersion.minor
 	};
+
 	if (token_info->flags & CKF_CLOCK_ON_TOKEN) {
 		memcpy(
 		    token->utc_time,
@@ -248,6 +251,7 @@ static libssig_status token_from_info(
 		token_free(token);
 		return status;
 	}
+
 	status = token_uri_create(token_info, &token->uri);
 	if (status != LIBSSIG_OK) {
 		token_free(token);
@@ -399,6 +403,7 @@ libssig_status libssig_tokens(
 	if (!ctx || !ctx->impl || !ctx->impl->modules) {
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
+
 	libssig_status status = LIBSSIG_OK;
 
 	libssig_token_list collected = {0};

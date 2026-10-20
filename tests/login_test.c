@@ -57,12 +57,15 @@ int main(void) {
 	CK_RV               rv = CKR_OK;
 	CHECK(libssig_session_login(&s, pin, 4, &rv) == LIBSSIG_OK);
 	CHECK(rv == CKR_OK && login_count == 1 && !memcmp(pin, "1234", 4));
+
 	login_rv = CKR_USER_ALREADY_LOGGED_IN;
 	CHECK(libssig_session_login(&s, pin, 4, &rv) == LIBSSIG_OK);
 	CHECK(rv == CKR_USER_ALREADY_LOGGED_IN && login_count == 2);
+
 	login_rv = CKR_PIN_INCORRECT;
 	CHECK(libssig_session_login(&s, pin, 4, &rv) == LIBSSIG_ERROR_PKCS11);
 	CHECK(rv == CKR_PIN_INCORRECT && login_count == 3);
+
 	login_rv = CKR_PIN_LOCKED;
 	CHECK(libssig_session_login(&s, pin, 4, &rv) == LIBSSIG_ERROR_PKCS11);
 	CHECK(rv == CKR_PIN_LOCKED && login_count == 4);
@@ -81,6 +84,7 @@ int main(void) {
 	    libssig_session_login(&s, NULL, 0, &rv) == LIBSSIG_OK &&
 	    login_count == 5
 	);
+
 	info_rv = CKR_TOKEN_NOT_PRESENT;
 	CHECK(libssig_session_login(&s, pin, 4, &rv) == LIBSSIG_ERROR_PKCS11);
 	CHECK(rv == CKR_TOKEN_NOT_PRESENT && login_count == 5);

@@ -157,9 +157,9 @@ int main(void) {
 		fprintf(stderr, "Cargar módulos: status=%d\n", (int)status);
 		return 1;
 	}
+
 	libssig_token_list tokens = {0};
 	status = libssig_tokens(&ctx, &tokens, true);
-
 	if (status != LIBSSIG_OK) {
 		printf(
 		    "{\"error\": {\"status\": %d, \"ck_rv\": %lu}}\n",
@@ -187,6 +187,7 @@ int main(void) {
 			libssig_context_close(&ctx);
 			return 1;
 		}
+
 		token_print(&tokens.items[i], &certs);
 		libssig_certificates_free(&certs);
 		puts(i + 1 < tokens.count ? "," : "");

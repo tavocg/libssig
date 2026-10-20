@@ -57,6 +57,7 @@ int main(void) {
 	libssig_string_list names = {0};
 	CHECK(token_query(0, &names) == LIBSSIG_OK);
 	CHECK(!names.items && !names.count);
+
 	CHECK(token_query(CKF_RNG | CKF_LOGIN_REQUIRED, &names) == LIBSSIG_OK);
 	CHECK(names.count == 2);
 	CHECK(!strcmp(names.items[0], "rng"));
@@ -65,6 +66,7 @@ int main(void) {
 	CHECK(!tokens.items && !tokens.count);
 	libssig_tokens_free(&tokens);
 	libssig_tokens_free(NULL);
+
 	CHECK(token_query(ULONG_MAX, &names) == LIBSSIG_OK);
 	CHECK(names.count > 0 && names.count <= sizeof(unsigned long) * CHAR_BIT);
 	for (size_t i = 0; i < names.count; ++i) {
@@ -89,8 +91,10 @@ int main(void) {
 		libssig_tokens_free(&tokens);
 	}
 	CHECK(recognized == total);
+
 	CHECK(token_query(unknown, &names) == LIBSSIG_OK);
 	CHECK(!names.items && !names.count);
+
 	CHECK(token_query(unknown | CKF_RNG, &names) == LIBSSIG_OK);
 	CHECK(names.count == 1 && !strcmp(names.items[0], "rng"));
 	libssig_tokens_free(&tokens);

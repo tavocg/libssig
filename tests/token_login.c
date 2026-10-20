@@ -45,6 +45,7 @@ static libssig_status token_login(libssig_session* s, CK_RV* out_rv) {
 		);
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
+
 	char pin[1024] = {0};
 	if (EVP_read_pw_string(pin, sizeof(pin), "PIN: ", 0) != 0) {
 		OPENSSL_cleanse(pin, sizeof(pin));
