@@ -26,10 +26,12 @@ static CK_RV mock_slots_get(
 		*slot_count = token_count;
 		return CKR_OK;
 	}
+
 	if (*slot_count < token_count) {
 		*slot_count = token_count;
 		return CKR_BUFFER_TOO_SMALL;
 	}
+
 	for (CK_ULONG i = 0; i < token_count; ++i) {
 		out_slots[i] = i;
 	}

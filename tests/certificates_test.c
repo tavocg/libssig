@@ -70,22 +70,27 @@ static CK_RV mock_attribute_get(
 	if (attribute_rv != CKR_OK) {
 		return attribute_rv;
 	}
+
 	if (attribute_missing) {
 		attribute->ulValueLen = CK_UNAVAILABLE_INFORMATION;
 		return CKR_ATTRIBUTE_TYPE_INVALID;
 	}
+
 	if (attribute->type == CKA_LABEL) {
 		value = "test";
 		len = 4;
 	}
+
 	if (attribute->type == CKA_VALUE) {
 		value = der;
 		len = sizeof(der);
 	}
+
 	if (attribute->pValue && attribute_grows) {
 		attribute->ulValueLen = len + 1;
 		return CKR_BUFFER_TOO_SMALL;
 	}
+
 	if (attribute->pValue) {
 		memcpy(attribute->pValue, value, len);
 	}

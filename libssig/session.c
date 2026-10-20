@@ -18,12 +18,15 @@ static libssig_status slot_match(
 		*out_rv = CKR_OK;
 		return LIBSSIG_OK;
 	}
+
 	if (*out_rv != CKR_OK) {
 		return LIBSSIG_ERROR_PKCS11;
 	}
+
 	if (!p11_kit_uri_match_token_info(uri, &token_info)) {
 		return LIBSSIG_OK;
 	}
+
 	if (s->module) {
 		return LIBSSIG_ERROR_AMBIGUOUS;
 	}
@@ -43,9 +46,11 @@ static libssig_status module_token_find(
 	if (*out_rv != CKR_OK) {
 		return LIBSSIG_ERROR_PKCS11;
 	}
+
 	if (!slot_count) {
 		return LIBSSIG_OK;
 	}
+
 	if (slot_count > SIZE_MAX / sizeof(CK_SLOT_ID)) {
 		return LIBSSIG_ERROR_MEMORY;
 	}
@@ -152,9 +157,11 @@ libssig_status libssig_session_login(
 	if (*out_rv != CKR_OK) {
 		return LIBSSIG_ERROR_PKCS11;
 	}
+
 	if (!(token_info.flags & CKF_LOGIN_REQUIRED)) {
 		return LIBSSIG_OK;
 	}
+
 	if (!pin && !(token_info.flags & CKF_PROTECTED_AUTHENTICATION_PATH)) {
 		return LIBSSIG_ERROR_ARGUMENT;
 	}

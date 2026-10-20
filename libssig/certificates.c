@@ -14,6 +14,7 @@ void libssig_certificates_free(libssig_certificate_list* certs) {
 	if (!certs) {
 		return;
 	}
+
 	for (size_t i = 0; i < certs->count; ++i) {
 		certificate_free(&certs->items[i]);
 	}
@@ -198,6 +199,7 @@ libssig_status libssig_certificates_collect(
 			status = LIBSSIG_ERROR_PKCS11;
 			break;
 		}
+
 		if (!count) {
 			break;
 		}

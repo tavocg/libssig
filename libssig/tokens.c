@@ -61,10 +61,12 @@ static libssig_status token_flags_names(
 			++count;
 		}
 	}
+
 	if (count > sizeof(flags) * CHAR_BIT ||
 	    count > SIZE_MAX / sizeof(*names->items)) {
 		return LIBSSIG_ERROR_MEMORY;
 	}
+
 	if (!count) {
 		return LIBSSIG_OK;
 	}
@@ -72,6 +74,7 @@ static libssig_status token_flags_names(
 	if (!names->items) {
 		return LIBSSIG_ERROR_MEMORY;
 	}
+
 	for (size_t i = 0; i < sizeof(flag_names) / sizeof(flag_names[0]); ++i) {
 		if (flags & flag_names[i].value) {
 			names->items[names->count++] = flag_names[i].name;
@@ -336,6 +339,7 @@ static libssig_status slot_token_collect(
 		tokens->ck_rv = rv;
 		return status;
 	}
+
 	if (!hardware) {
 		return LIBSSIG_OK;
 	}

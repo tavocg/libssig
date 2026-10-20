@@ -37,6 +37,7 @@ static CK_RV mock_session_login(
 	if (handle != 42 || user != CKU_USER) {
 		return CKR_ARGUMENTS_BAD;
 	}
+
 	if (protected_path) {
 		if (pin || pin_len) {
 			return CKR_ARGUMENTS_BAD;

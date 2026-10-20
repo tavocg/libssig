@@ -27,10 +27,12 @@ static libssig_status token_login(libssig_session* s, CK_RV* out_rv) {
 	if (*out_rv != CKR_OK) {
 		return LIBSSIG_ERROR_PKCS11;
 	}
+
 	if (!(token_info.flags & CKF_LOGIN_REQUIRED)) {
 		puts("El token no requiere autenticación.");
 		return LIBSSIG_OK;
 	}
+
 	if (token_info.flags & CKF_PROTECTED_AUTHENTICATION_PATH) {
 		puts("Completá la autenticación en el dispositivo.");
 		return libssig_session_login(s, NULL, 0, out_rv);
