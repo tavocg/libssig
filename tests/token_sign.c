@@ -383,6 +383,7 @@ static libssig_status public_file_sign(
     libssig_signature*             signature
 ) {
 	libssig_sign_params request = {
+	    .level = LIBSSIG_LEVEL_B_B,
 	    .token = params->token,
 	    .cert = cert,
 	    .data = params->data,

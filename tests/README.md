@@ -263,3 +263,13 @@ Cada ejecución conserva TSQ, TSR y CAdES en un subdirectorio nuevo de
 
 El auxiliar `timestamp-file` también permite generar solicitudes y aplicar
 respuestas manualmente; ejecutarlo sin argumentos muestra su uso.
+
+### Niveles CAdES/PAdES
+
+`ctest -R '^ades$' --output-on-failure` genera B-B, B-T, B-LT y B-LTA con
+servicios locales en memoria, sin red ni tarjeta. Prueba las nueve
+combinaciones de algoritmo/hash, contenido CAdES incluido/separado, DSS PDF,
+OCSP/CRL, errores de TSA, revocación y alteraciones de evidencia protegida.
+
+Para la comprobación independiente opcional con pyHanko y OpenSSL, ver
+[doc/profiles.md](../doc/profiles.md). No es una dependencia de compilación.

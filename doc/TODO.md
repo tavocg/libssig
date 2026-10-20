@@ -30,17 +30,16 @@ typedef enum {
 typedef enum {
     LIBSSIG_FORMAT_CADES,
     // Luego...
-    //LIBSSIG_FORMAT_PADES,
+    LIBSSIG_FORMAT_PADES,
     //LIBSSIG_FORMAT_XADES,
     //LIBSSIG_FORMAT_JADES,
 } libssig_format;
 
 typedef enum {
-    // Luego...
-    //LIBSSIG_LEVEL_B_B,
-    //LIBSSIG_LEVEL_B_T,
-    //LIBSSIG_LEVEL_B_LT,
-    LIBSSIG_LEVEL_B_LTA,
+    LIBSSIG_LEVEL_B_LTA = 0,
+    LIBSSIG_LEVEL_B_B,
+    LIBSSIG_LEVEL_B_T,
+    LIBSSIG_LEVEL_B_LT,
 } libssig_level;
 
 typedef struct {
@@ -107,10 +106,15 @@ Para conseguir esto, se requiere lo siguiente:
       de CLI lo expondría mediante `sign tokens`, pero idealmente permitiría
       `--info label,model,flags,...etc` y también `--json`. Por defecto lista
       únicamente URIs y usa los módulos que encuentre `p11-kit`.
-- [ ] Firmado, empezar a probar con CAdES y luego PAdES con:
+- [X] Firmado CAdES y PAdES con:
       - `-a RSA` (RSA PKCS#1 v1.5)
       - `-H SHA256`
       - `-l B-LTA`
       Los argumentos son case insensitive.
       Para conseguir esto, el módulo debe exponer `libssig_sign`.
 - [ ] `libssig_verify`. Con el objetivo de `sign verify FILES...`
+
+Los niveles de generación B-B, B-T, B-LT y B-LTA están implementados para
+CAdES y PAdES; LTA es el valor por defecto. Los servicios de red los aporta
+la aplicación mediante `libssig_sign_services`. Sign selecciona el nivel con
+`-l` y el formato con `-f`; ver [profiles.md](profiles.md) para límites actuales.

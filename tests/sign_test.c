@@ -693,6 +693,7 @@ static libssig_status public_sign(
     libssig_signature*             output
 ) {
 	libssig_sign_params request = {
+	    .level = LIBSSIG_LEVEL_B_B,
 	    .token = params->token,
 	    .cert = cert,
 	    .data = params->data,
@@ -764,6 +765,7 @@ static int public_inputs_invalid_check(
     const libssig_certificate*     cert
 ) {
 	libssig_sign_params base = {
+	    .level = LIBSSIG_LEVEL_B_B,
 	    .token = params->token,
 	    .cert = cert,
 	    .data = params->data,
@@ -883,6 +885,42 @@ static int cades_mime_detection_check(
 	return 0;
 }
 
+static int pades_check(
+    const libssig_context*         ctx,
+    const libssig_key_sign_params* params,
+    const libssig_certificate*     cert
+) {
+	static const unsigned char pdf
+	    [] = "%PDF-1.7\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 "
+	         "0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 "
+	         "obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] "
+	         ">>\nendobj\nxref\n0 4\n0000000000 65535 f \n0000000009 00000 n "
+	         "\n0000000058 00000 n \n0000000115 00000 n \ntrailer\n<< /Size 4 "
+	         "/Root 1 0 R >>\nstartxref\n186\n%%EOF\n";
+	libssig_sign_params request = {
+	    .level = LIBSSIG_LEVEL_B_B,
+	    .format = LIBSSIG_FORMAT_PADES,
+	    .token = params->token,
+	    .cert = cert,
+	    .pin = params->pin,
+	    .pin_len = params->pin_len,
+	    .algo = params->algo,
+	    .hash = params->hash,
+	    .data = pdf,
+	    .data_len = sizeof(pdf) - 1,
+	};
+	libssig_signature output = {0};
+	CHECK(libssig_sign(ctx, &request, &output) == LIBSSIG_OK);
+	CHECK(
+	    output.len > sizeof(pdf) && !memcmp(output.data, pdf, sizeof(pdf) - 1)
+	);
+	char name[80];
+	snprintf(name, sizeof(name), "pades-%d-%d.pdf", params->algo, params->hash);
+	CHECK(fixture_write(name, output.data, output.len) == 0);
+	libssig_signature_free(&output);
+	return 0;
+}
+
 static int cms_check(
     const libssig_context*   ctx,
     libssig_key_sign_params* params
@@ -899,6 +937,7 @@ static int cms_check(
 	    .der = der,
 	    .der_len = (size_t)len
 	};
+	CHECK(pades_check(ctx, params, &cert) == 0);
 	libssig_signature output = {0};
 	CHECK(
 	    public_sign(ctx, params, &cert, LIBSSIG_FORMAT_CMS, &output) ==

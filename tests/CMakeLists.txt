@@ -189,3 +189,12 @@ if(LIBSSIG_TEST_TSA_SINPE)
             -P ${CMAKE_CURRENT_SOURCE_DIR}/tsa_sinpe.cmake)
     set_tests_properties(tsa_sinpe PROPERTIES LABELS "network;manual" TIMEOUT 90 RUN_SERIAL TRUE)
 endif()
+
+add_executable(ades_test ades_test.c)
+target_link_libraries(ades_test PRIVATE libssig::ssig OpenSSL::Crypto)
+target_compile_options(ades_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME ades COMMAND ${CMAKE_COMMAND}
+    "-DSIGN_TEST=$<TARGET_FILE:sign_test>"
+    "-DADES_TEST=$<TARGET_FILE:ades_test>"
+    "-DFIXTURES=${CMAKE_CURRENT_BINARY_DIR}/ades-fixtures"
+    -P ${CMAKE_CURRENT_SOURCE_DIR}/ades_verify.cmake)

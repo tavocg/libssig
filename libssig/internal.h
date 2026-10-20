@@ -55,6 +55,7 @@ typedef struct {
 	libssig_algo         algo;
 	libssig_hash         hash;
 	unsigned int         options;
+	bool                 pades;
 	const char*          mime_type; /* CAdES: NULL detecta MIME con libmagic. */
 } libssig_key_sign_params;
 

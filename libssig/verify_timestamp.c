@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-#include <libssig/timestamp_internal.h>
+#include <libssig/ades_internal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -363,6 +363,45 @@ libssig_status libssig_verify_timestamps(
 			break;
 		}
 	}
+	trust_free(&trust);
+	return status;
+}
+
+libssig_status libssig_verify_timestamp_token(
+    CMS_ContentInfo*             token,
+    const libssig_verify_params* params,
+    const EVP_MD*                digest,
+    const unsigned char*         imprint,
+    size_t                       imprint_len,
+    libssig_verify_timestamp*    result
+) {
+	result->present = true;
+	timestamp_trust trust = {0};
+	libssig_status  status = trust_load(params, &trust);
+	TS_TST_INFO*    info = info_decode(token);
+	TS_MSG_IMPRINT* message = info ? TS_TST_INFO_get_msg_imprint(info) : NULL;
+	X509_ALGOR* algorithm = message ? TS_MSG_IMPRINT_get_algo(message) : NULL;
+	ASN1_OCTET_STRING* value = message ? TS_MSG_IMPRINT_get_msg(message) : NULL;
+	if (status == LIBSSIG_OK &&
+	    (!info || !digest || TS_TST_INFO_get_version(info) != 1 ||
+	     !libssig_timestamp_time_valid(info) ||
+	     OBJ_obj2nid(algorithm->algorithm) != EVP_MD_get_type(digest) ||
+	     ASN1_STRING_length(value) != (int)imprint_len ||
+	     CRYPTO_memcmp(ASN1_STRING_get0_data(value), imprint, imprint_len))) {
+		status = LIBSSIG_ERROR_VERIFY;
+	}
+	X509* cert = NULL;
+	if (status == LIBSSIG_OK) {
+		status = token_signature_check(token, info, &trust, &cert);
+	}
+	if (status == LIBSSIG_OK) {
+		status = result_copy(info, cert, result);
+	}
+	if (status == LIBSSIG_OK) {
+		status = trust_check(token, cert, &trust, result);
+	}
+	result->status = status;
+	TS_TST_INFO_free(info);
 	trust_free(&trust);
 	return status;
 }

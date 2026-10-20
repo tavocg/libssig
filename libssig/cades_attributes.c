@@ -117,8 +117,8 @@ bool libssig_cades_attributes_add(
 ) {
 	return content_attributes_add(signer, params, digest) &&
 	       certificate_attribute_add(signer, cert, digest) &&
-	       time_attribute_add(signer) &&
-	       mime_attribute_add(signer, params->mime_type);
+	       (params->pades || time_attribute_add(signer)) &&
+	       (params->pades || mime_attribute_add(signer, params->mime_type));
 }
 
 static STACK_OF(X509_ATTRIBUTE) * attributes_take(CMS_SignerInfo* signer) {

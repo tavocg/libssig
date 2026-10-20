@@ -40,6 +40,7 @@
               p11-kit
               file
               openssl
+              qpdf
             ];
 
             shellHook = ''

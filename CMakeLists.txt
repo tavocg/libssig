@@ -22,6 +22,11 @@ find_package(PkgConfig REQUIRED)
 find_package(OpenSSL 3.0 REQUIRED COMPONENTS Crypto)
 pkg_check_modules(P11_KIT REQUIRED IMPORTED_TARGET p11-kit-1)
 pkg_check_modules(MAGIC REQUIRED IMPORTED_TARGET libmagic)
+find_path(QPDF_INCLUDE_DIR qpdf/qpdf-c.h)
+find_library(QPDF_LIBRARY qpdf)
+if(NOT QPDF_INCLUDE_DIR OR NOT QPDF_LIBRARY)
+    message(FATAL_ERROR "QPDF >= 11 development files are required for PAdES")
+endif()
 
 file(GLOB_RECURSE LIBSSIG_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/libssig/*.c"
@@ -35,7 +40,10 @@ target_link_libraries(ssig PRIVATE
     PkgConfig::P11_KIT
     PkgConfig::MAGIC
     OpenSSL::Crypto
+    ${QPDF_LIBRARY}
 )
+
+target_include_directories(ssig PRIVATE ${QPDF_INCLUDE_DIR})
 
 target_include_directories(ssig PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
@@ -72,6 +80,12 @@ install(EXPORT libssigTargets
     FILE libssigTargets.cmake
     NAMESPACE libssig::
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libssig
+)
+
+# Allow sibling projects to consume the local build without installing it.
+export(EXPORT libssigTargets
+    FILE "${CMAKE_CURRENT_BINARY_DIR}/libssigTargets.cmake"
+    NAMESPACE libssig::
 )
 
 configure_package_config_file(

@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+file(MAKE_DIRECTORY "${FIXTURES}")
+execute_process(COMMAND "${SIGN_TEST}" "${FIXTURES}" RESULT_VARIABLE result)
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "Signature fixtures failed")
+endif()
+execute_process(COMMAND "${ADES_TEST}" "${FIXTURES}" RESULT_VARIABLE result)
+if(NOT result EQUAL 0)
+    message(FATAL_ERROR "Baseline level checks failed")
+endif()

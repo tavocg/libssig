@@ -21,6 +21,7 @@ libssig_sign_params params = {
     .algo = LIBSSIG_ALGO_RSA_PSS,
     .hash = LIBSSIG_HASH_SHA384,
     .format = LIBSSIG_FORMAT_CADES,
+    .level = LIBSSIG_LEVEL_B_B,
     .mime_type = "application/pdf",
 };
 
@@ -36,14 +37,17 @@ libssig_signature_free(&signature);
 ```
 
 A zero-initialized parameter structure defaults to `LIBSSIG_ALGO_RSA_PKCS`,
-`LIBSSIG_HASH_SHA256` and `LIBSSIG_FORMAT_CADES`; the token, certificate and
-content still need to be supplied. Empty content is represented by `NULL, 0`.
+`LIBSSIG_HASH_SHA256`, `LIBSSIG_FORMAT_CADES` and `LIBSSIG_LEVEL_B_LTA`; the token, certificate and
+content still need to be supplied. LTA also requires `services`; the example
+above explicitly selects B-B for offline signing. See [profiles](profiles.md). Empty content is represented by `NULL, 0`.
 
 | Parameter | Choices |
 | --- | --- |
 | `algo` | `LIBSSIG_ALGO_RSA_PKCS`, `LIBSSIG_ALGO_RSA_PSS`, `LIBSSIG_ALGO_ECDSA` |
 | `hash` | `LIBSSIG_HASH_SHA256`, `LIBSSIG_HASH_SHA384`, `LIBSSIG_HASH_SHA512` |
-| `format` | `LIBSSIG_FORMAT_CADES` (B-B), `LIBSSIG_FORMAT_CMS` (without signed attributes) |
+| `format` | `LIBSSIG_FORMAT_CADES`, `LIBSSIG_FORMAT_PADES`, `LIBSSIG_FORMAT_CMS` (B-B only) |
+| `level` | `LIBSSIG_LEVEL_B_B`, `LIBSSIG_LEVEL_B_T`, `LIBSSIG_LEVEL_B_LT`, `LIBSSIG_LEVEL_B_LTA` (default) |
+| `services` | Transport callback, TSA URL and trust configuration for T/LT/LTA |
 | `options` | `0` embeds the original content; `LIBSSIG_SIGN_DETACHED` keeps it separate |
 | `mime_type` | Optional CAdES MIME type; NULL detects it from content with libmagic; ignored for CMS |
 

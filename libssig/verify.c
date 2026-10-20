@@ -1,3 +1,4 @@
+#include <libssig/ades_internal.h>
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include <libssig/ocsp_internal.h>
 #include <libssig/timestamp_internal.h>
@@ -19,6 +20,7 @@ void libssig_verify_free(libssig_verify_result* result) {
 		free(result->signers[i].cert_der);
 		free(result->signers[i].mime_type);
 		free(result->signers[i].timestamp.cert_der);
+		free(result->signers[i].archive.cert_der);
 	}
 	free(result->signers);
 	*result = (libssig_verify_result){0};
@@ -299,6 +301,12 @@ static libssig_status verification_run(
 			status = revocation;
 		}
 	}
+	if (status == LIBSSIG_OK || status == LIBSSIG_ERROR_TRUST) {
+		libssig_status archive = libssig_verify_archives(cms, params, result);
+		if (archive != LIBSSIG_OK) {
+			status = archive;
+		}
+	}
 	sk_X509_pop_free(embedded, X509_free);
 	sk_X509_pop_free(certs, X509_free);
 	sk_X509_pop_free(roots, X509_free);
@@ -341,6 +349,16 @@ libssig_status libssig_verify(
 	    (params->intermediates_data && !params->ca_data &&
 	     !(params->options & LIBSSIG_VERIFY_SYSTEM_TRUST))) {
 		return LIBSSIG_ERROR_ARGUMENT;
+	}
+
+	if (params->data_len >= 5 && !memcmp(params->data, "%PDF-", 5)) {
+		libssig_status status = libssig_pades_verify(params, result);
+		if (status != LIBSSIG_OK && status != LIBSSIG_ERROR_TRUST &&
+		    status != LIBSSIG_ERROR_TIMESTAMP && status != LIBSSIG_ERROR_OCSP &&
+		    status != LIBSSIG_ERROR_REVOKED) {
+			libssig_verify_free(result);
+		}
+		return status;
 	}
 
 	const unsigned char* cursor = params->data;

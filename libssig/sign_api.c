@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
+#include <libssig/ades_internal.h>
 #include <libssig/internal.h>
 #include <limits.h>
 #include <string.h>
@@ -38,7 +39,8 @@ static libssig_status params_check(
 	}
 
 	if ((params->format != LIBSSIG_FORMAT_CADES &&
-	     params->format != LIBSSIG_FORMAT_CMS) ||
+	     params->format != LIBSSIG_FORMAT_CMS &&
+	     params->format != LIBSSIG_FORMAT_PADES) ||
 	    (params->algo != LIBSSIG_ALGO_RSA_PKCS &&
 	     params->algo != LIBSSIG_ALGO_RSA_PSS &&
 	     params->algo != LIBSSIG_ALGO_ECDSA) ||
@@ -46,6 +48,19 @@ static libssig_status params_check(
 	     params->hash != LIBSSIG_HASH_SHA384 &&
 	     params->hash != LIBSSIG_HASH_SHA512)) {
 		return LIBSSIG_ERROR_UNSUPPORTED;
+	}
+
+	if (!libssig_level_valid(params->level)) {
+		return LIBSSIG_ERROR_ARGUMENT;
+	}
+	if (params->format == LIBSSIG_FORMAT_CMS &&
+	    params->level != LIBSSIG_LEVEL_B_B) {
+		return LIBSSIG_ERROR_UNSUPPORTED;
+	}
+	if (params->level != LIBSSIG_LEVEL_B_B &&
+	    (!params->services || !params->services->exchange ||
+	     !params->services->tsa_url)) {
+		return LIBSSIG_ERROR_ARGUMENT;
 	}
 
 	if (params->options & ~LIBSSIG_SIGN_DETACHED) {
@@ -74,6 +89,10 @@ libssig_status libssig_sign(
 		return status;
 	}
 
+	if (params->format == LIBSSIG_FORMAT_PADES) {
+		return libssig_pades_sign(ctx, params, signature);
+	}
+
 	libssig_key_sign_params signing = {
 	    .token = params->token,
 	    .id = params->cert->id,
@@ -87,7 +106,30 @@ libssig_status libssig_sign(
 	    .mime_type = params->mime_type,
 	    .options = params->options,
 	};
-	return params->format == LIBSSIG_FORMAT_CADES
-	           ? libssig_cades_sign(ctx, &signing, params->cert, signature)
-	           : libssig_cms_sign(ctx, &signing, params->cert, signature);
+	status = params->format == LIBSSIG_FORMAT_CADES
+	             ? libssig_cades_sign(ctx, &signing, params->cert, signature)
+	             : libssig_cms_sign(ctx, &signing, params->cert, signature);
+	if (status == LIBSSIG_OK && params->level != LIBSSIG_LEVEL_B_B) {
+		static const unsigned char empty = 0;
+		libssig_extend_params      extend = {
+		         .data = signature->data,
+		         .data_len = signature->len,
+		         .content = params->options & LIBSSIG_SIGN_DETACHED
+		                        ? (params->data ? params->data : &empty)
+		                        : NULL,
+		         .content_len = params->options & LIBSSIG_SIGN_DETACHED
+		                            ? params->data_len
+		                            : 0,
+		         .level = params->level,
+		         .hash = params->hash,
+		         .services = params->services,
+        };
+		libssig_signature output = {0};
+		status = libssig_extend(&extend, &output);
+		libssig_signature_free(signature);
+		if (status == LIBSSIG_OK) {
+			*signature = output;
+		}
+	}
+	return status;
 }
