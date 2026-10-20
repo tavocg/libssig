@@ -136,3 +136,35 @@ attached and detached, independent OpenSSL verification, altered content and
 signatures, incorrect ESS certificate hashes, missing content/certificates,
 truncated/trailing input, empty content, multiple signers, untrusted signers,
 and a controlled default trust store containing a valid or expired signer.
+
+## Custom certificate authorities
+
+`--ca-file` activates trust checking with the supplied roots; `--intermediates`
+provides untrusted certificates for chain construction. Files may contain one
+or more PEM `CERTIFICATE` blocks (whitespace between blocks), or one DER
+certificate. The signer certificate must be embedded in the CMS/CAdES container.
+
+```sh
+./build/tests/verify-file \
+  --ca-file raices.pem \
+  --intermediates intermediarios.pem \
+  documento.p7m
+
+# Add the system store to the custom authorities.
+./build/tests/verify-file \
+  --system-trust \
+  --ca-file raices.pem \
+  --intermediates intermediarios.pem \
+  documento.p7m
+```
+
+Options precede file paths; append the original document for detached signatures.
+`--intermediates` requires `--ca-file` or `--system-trust`. Missing files, empty
+bundles, malformed certificates, and unknown or duplicated file options fail.
+Without `--system-trust`, custom authorities are the only trusted certificates.
+Neither external nor embedded intermediates become trusted authorities.
+
+`verify_trust` generates a root/intermediate/signer chain and tests missing or
+untrusted issuers, PEM and DER, duplicate/malformed bundles, and custom/system
+store combinations. `verify_cli` checks command parsing, failure exit codes,
+and compares the custom chain with independent OpenSSL verification.

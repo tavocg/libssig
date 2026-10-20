@@ -286,7 +286,17 @@ typedef struct {
 	size_t               data_len;
 	const unsigned char* content;
 	size_t               content_len;
-	unsigned int         options;
+	/* PEM de uno o varios certificados, o un certificado DER.
+	 * ca_data activa validación de confianza con estas raíces.
+	 * SYSTEM_TRUST agrega las raíces del sistema a las proporcionadas.
+	 * Los intermediarios nunca se incorporan al almacén confiable. */
+	const unsigned char* ca_data;
+
+	size_t               ca_data_len;
+	const unsigned char* intermediates_data;
+
+	size_t       intermediates_data_len;
+	unsigned int options;
 } libssig_verify_params;
 
 /* Datos del firmante copiados; propiedad del resultado. */
@@ -307,9 +317,12 @@ typedef struct {
 } libssig_verify_result;
 
 /* Sin contexto PKCS#11, token ni PIN. Verifica todos los firmantes.
- * 0 verifica firma, contenido y vínculos ESS presentes (incluido V2).
- * SYSTEM_TRUST exige además cadenas vigentes hasta el almacén predeterminado
- * de OpenSSL (incluye su configuración SSL_CERT_FILE/SSL_CERT_DIR).
+ * Sin ca_data ni SYSTEM_TRUST verifica firma, contenido y vínculos ESS.
+ * ca_data exige una cadena vigente hasta las raíces proporcionadas.
+ * SYSTEM_TRUST suma las raíces del almacén predeterminado de OpenSSL
+ * (incluye SSL_CERT_FILE/SSL_CERT_DIR) a ca_data, si está presente.
+ * Intermediarios requieren ca_data o SYSTEM_TRUST.
+ * Bundles hasta INT_MAX bytes; vacíos, inválidos o con basura se rechazan.
  * No consulta red, OCSP ni CRL; no certifica cumplimiento completo CAdES.
  * ERROR_TRUST conserva firma válida, firmantes y errores de confianza.
  * Otros errores dejan salida vacía. Liberar antes de reutilizar. */

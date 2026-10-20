@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-#include <libssig/libssig.h>
+#include <libssig/verify_internal.h>
 #include <limits.h>
 #include <openssl/cms.h>
 #include <openssl/cmserr.h>
@@ -187,7 +187,8 @@ static libssig_status signature_error(void) {
 static libssig_status signatures_check(
     CMS_ContentInfo*             cms,
     const libssig_verify_params* params,
-    libssig_verify_result*       result
+    STACK_OF(X509) * certs,
+    libssig_verify_result* result
 ) {
 	result->detached = CMS_is_detached(cms) == 1;
 	if (result->detached && !params->content) {
@@ -233,7 +234,6 @@ static libssig_status signatures_check(
 	}
 	result->count = (size_t)count;
 
-	STACK_OF(X509)* certs = CMS_get1_certs(cms);
 	libssig_status status = LIBSSIG_OK;
 	for (int i = 0; i < count && status == LIBSSIG_OK; ++i) {
 		status = signer_copy(
@@ -242,69 +242,51 @@ static libssig_status signatures_check(
 		    &result->signers[i]
 		);
 	}
-	sk_X509_pop_free(certs, X509_free);
 	result->signature_valid = status == LIBSSIG_OK;
 	return status;
 }
 
-static libssig_status signer_trust_check(
-    CMS_SignerInfo* s,
-    X509_STORE*     store,
-    STACK_OF(X509) * certs,
-    libssig_verify_signer* signer
+static libssig_status verification_run(
+    CMS_ContentInfo*             cms,
+    const libssig_verify_params* params,
+    libssig_verify_result*       result
 ) {
-	X509* cert = NULL;
-	CMS_SignerInfo_get0_algs(s, NULL, &cert, NULL, NULL);
-	X509_STORE_CTX* ctx = X509_STORE_CTX_new();
-	if (!ctx || !X509_STORE_CTX_init(ctx, store, cert, certs)) {
-		X509_STORE_CTX_free(ctx);
-		return LIBSSIG_ERROR_CRYPTO;
+	STACK_OF(X509)* roots = NULL;
+	STACK_OF(X509)* certs = NULL;
+	libssig_status status = libssig_verify_certs_parse(
+	    params->ca_data,
+	    params->ca_data_len,
+	    &roots
+	);
+	if (status == LIBSSIG_OK) {
+		status = libssig_verify_certs_parse(
+		    params->intermediates_data,
+		    params->intermediates_data_len,
+		    &certs
+		);
 	}
 
-	/* Document signatures do not imply S/MIME certificate purpose. */
-	int ok = X509_verify_cert(ctx);
-	signer->trust_error = X509_STORE_CTX_get_error(ctx);
-	X509_STORE_CTX_free(ctx);
-	return ok == 1 ? LIBSSIG_OK : LIBSSIG_ERROR_TRUST;
+	STACK_OF(X509)* embedded = CMS_get1_certs(cms);
+	if (status == LIBSSIG_OK) {
+		status = libssig_verify_certs_append(certs, embedded);
+	}
+
+	if (status == LIBSSIG_OK) {
+		status = signatures_check(cms, params, certs, result);
+	}
+
+	if (status == LIBSSIG_OK &&
+	    (params->ca_data || (params->options & LIBSSIG_VERIFY_SYSTEM_TRUST))) {
+		status = libssig_verify_trust_check(cms, params, roots, certs, result);
+	}
+	sk_X509_pop_free(embedded, X509_free);
+	sk_X509_pop_free(certs, X509_free);
+	sk_X509_pop_free(roots, X509_free);
+	return status;
 }
 
-static libssig_status trust_check(
-    CMS_ContentInfo*       cms,
-    libssig_verify_result* result
-) {
-	X509_STORE* store = X509_STORE_new();
-	if (!store) {
-		return LIBSSIG_ERROR_MEMORY;
-	}
-
-	if (X509_STORE_set_default_paths(store) != 1) {
-		X509_STORE_free(store);
-		return LIBSSIG_ERROR_TRUST;
-	}
-
-	STACK_OF(X509)* certs = CMS_get1_certs(cms);
-	STACK_OF(CMS_SignerInfo)* signers = CMS_get0_SignerInfos(cms);
-	libssig_status status = LIBSSIG_OK;
-	result->trust_checked = true;
-	result->trusted = true;
-	for (size_t i = 0; i < result->count; ++i) {
-		libssig_status checked = signer_trust_check(
-		    sk_CMS_SignerInfo_value(signers, (int)i),
-		    store,
-		    certs,
-		    &result->signers[i]
-		);
-		if (checked != LIBSSIG_OK) {
-			result->trusted = false;
-			status = checked;
-			if (checked != LIBSSIG_ERROR_TRUST) {
-				break;
-			}
-		}
-	}
-	sk_X509_pop_free(certs, X509_free);
-	X509_STORE_free(store);
-	return status;
+static bool bundle_valid(const unsigned char* data, size_t len) {
+	return len <= INT_MAX && ((data && len) || (!data && !len));
 }
 
 libssig_status libssig_verify(
@@ -319,7 +301,14 @@ libssig_status libssig_verify(
 	if (!params || !params->data || !params->data_len ||
 	    params->data_len > LONG_MAX || params->content_len > INT_MAX ||
 	    (!params->content && params->content_len) ||
-	    (params->options & ~LIBSSIG_VERIFY_SYSTEM_TRUST)) {
+	    (params->options & ~LIBSSIG_VERIFY_SYSTEM_TRUST) ||
+	    !bundle_valid(params->ca_data, params->ca_data_len) ||
+	    !bundle_valid(
+	        params->intermediates_data,
+	        params->intermediates_data_len
+	    ) ||
+	    (params->intermediates_data && !params->ca_data &&
+	     !(params->options & LIBSSIG_VERIFY_SYSTEM_TRUST))) {
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
 
@@ -335,12 +324,8 @@ libssig_status libssig_verify(
 	}
 
 	libssig_status status = OBJ_obj2nid(CMS_get0_type(cms)) == NID_pkcs7_signed
-	                            ? signatures_check(cms, params, result)
+	                            ? verification_run(cms, params, result)
 	                            : LIBSSIG_ERROR_UNSUPPORTED;
-	if (status == LIBSSIG_OK &&
-	    (params->options & LIBSSIG_VERIFY_SYSTEM_TRUST)) {
-		status = trust_check(cms, result);
-	}
 	CMS_ContentInfo_free(cms);
 	if (status != LIBSSIG_OK && status != LIBSSIG_ERROR_TRUST) {
 		libssig_verify_free(result);

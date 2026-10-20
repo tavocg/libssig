@@ -57,7 +57,8 @@ Its zero-initialized defaults are CAdES, RSA PKCS#1 v1.5 and SHA-256.
 See [the signing API example](doc/signing.md) for parameters and ownership.
 
 `libssig_verify()` checks CMS/CAdES signatures without a token. Optional
-`LIBSSIG_VERIFY_SYSTEM_TRUST` also requires trusted certificate chains.
+`LIBSSIG_VERIFY_SYSTEM_TRUST` or custom roots in `ca_data` also require trusted
+certificate chains. Additional intermediates can be supplied separately.
 See [the verification API](doc/verification.md).
 
 ## Build

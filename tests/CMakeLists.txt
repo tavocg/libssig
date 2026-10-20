@@ -115,3 +115,15 @@ add_executable(verify_test verify_test.c)
 target_link_libraries(verify_test PRIVATE libssig::ssig OpenSSL::Crypto)
 target_compile_options(verify_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME verify COMMAND verify_test)
+
+add_executable(verify_trust_test verify_trust_test.c)
+target_link_libraries(verify_trust_test PRIVATE libssig::ssig OpenSSL::Crypto)
+target_compile_options(verify_trust_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME verify_trust COMMAND verify_trust_test)
+add_test(NAME verify_cli
+    COMMAND ${CMAKE_COMMAND}
+        "-DTRUST_TEST=$<TARGET_FILE:verify_trust_test>"
+        "-DVERIFY_FILE=$<TARGET_FILE:verify_file>"
+        "-DOPENSSL=${OPENSSL_EXECUTABLE}"
+        "-DFIXTURES=${CMAKE_CURRENT_BINARY_DIR}/verify-fixtures"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_cli.cmake)
