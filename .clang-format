@@ -9,6 +9,8 @@ AlignAfterOpenBracket: BlockIndent
 ContinuationIndentWidth: 4
 BreakAfterReturnType: None
 PenaltyReturnTypeOnItsOwnLine: 1000000
+PenaltyBreakAssignment: 100000
+Cpp11BracedListStyle: false
 BinPackParameters: false
 AllowAllParametersOfDeclarationOnNextLine: false
 BinPackArguments: false

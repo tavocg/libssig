@@ -10,7 +10,7 @@ static void certificate_free(libssig_certificate* cert) {
 	*cert = (libssig_certificate){0};
 }
 
-void libssig_certificates_free(libssig_certificates* certs) {
+void libssig_certificates_free(libssig_certificate_list* certs) {
 	if (!certs) {
 		return;
 	}
@@ -112,10 +112,10 @@ static libssig_status certificate_read(
 }
 
 static libssig_status certificates_collect_one(
-    libssig_session*      s,
-    CK_OBJECT_HANDLE      object,
-    libssig_certificates* certs,
-    CK_RV*                out_rv
+    libssig_session*          s,
+    CK_OBJECT_HANDLE          object,
+    libssig_certificate_list* certs,
+    CK_RV*                    out_rv
 ) {
 	libssig_certificate cert = {0};
 	libssig_status      status = certificate_read(s, object, &cert, out_rv);
@@ -139,9 +139,9 @@ static libssig_status certificates_collect_one(
 }
 
 libssig_status libssig_certificates_collect(
-    libssig_session*      s,
-    libssig_certificates* certs,
-    CK_RV*                out_rv
+    libssig_session*          s,
+    libssig_certificate_list* certs,
+    CK_RV*                    out_rv
 ) {
 	CK_OBJECT_CLASS     object_class = CKO_CERTIFICATE;
 	CK_CERTIFICATE_TYPE type = CKC_X_509;
@@ -183,14 +183,14 @@ libssig_status libssig_certificates_collect(
 	return LIBSSIG_OK;
 }
 
-libssig_status libssig_certificates_list(
-    const libssig_token*  token,
-    libssig_certificates* certs
+libssig_status libssig_certificates(
+    const libssig_token*      token,
+    libssig_certificate_list* certs
 ) {
 	if (!certs) {
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
-	*certs = (libssig_certificates){0};
+	*certs = (libssig_certificate_list){0};
 	if (!token || !token->uri) {
 		return LIBSSIG_ERROR_ARGUMENT;
 	}

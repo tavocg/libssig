@@ -9,11 +9,21 @@ A small C library for digital signing using PKCS#11 through `p11-kit`.
 
 ## Public interface
 
-- `libssig_version_get`
-- `libssig_tokens_list`
+- `libssig_version`
+- `libssig_tokens`
 - `libssig_tokens_free`
-- `libssig_certificates_list`
+- `libssig_certificates`
 - `libssig_certificates_free`
+
+Get the loaded library version (each output pointer may be `NULL`):
+
+```c
+int major, minor, patch;
+libssig_version(&major, &minor, &patch);
+```
+
+Token hardware and firmware versions use `libssig_token_version`, which has
+`major` and `minor` components.
 
 ## Build
 

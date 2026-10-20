@@ -96,7 +96,7 @@ static void token_free(libssig_token* token) {
 	free(token->manufacturer);
 	free(token->model);
 	free(token->serial);
-	*token = (libssig_token){0};
+	*token = (libssig_token){ 0 };
 }
 
 static libssig_status token_uri_create(
@@ -123,15 +123,19 @@ static libssig_status token_from_info(
     const CK_TOKEN_INFO* token_info,
     libssig_token*       token
 ) {
-	*token = (libssig_token){0};
-	token->label =
-	    token_text_copy(token_info->label, sizeof(token_info->label));
+	*token = (libssig_token){ 0 };
+	token->label = token_text_copy(
+	    token_info->label,
+	    sizeof(token_info->label)
+	);
 	token->manufacturer = token_text_copy(
 	    token_info->manufacturerID,
 	    sizeof(token_info->manufacturerID)
 	);
-	token->model =
-	    token_text_copy(token_info->model, sizeof(token_info->model));
+	token->model = token_text_copy(
+	    token_info->model,
+	    sizeof(token_info->model)
+	);
 	token->serial = token_text_copy(
 	    token_info->serialNumber,
 	    sizeof(token_info->serialNumber)
@@ -147,12 +151,14 @@ static libssig_status token_from_info(
 	token->free_public_memory = token_info->ulFreePublicMemory;
 	token->total_private_memory = token_info->ulTotalPrivateMemory;
 	token->free_private_memory = token_info->ulFreePrivateMemory;
-	token->hardware_version =
-	    (libssig_version_info){token_info->hardwareVersion.major,
-	                           token_info->hardwareVersion.minor};
-	token->firmware_version =
-	    (libssig_version_info){token_info->firmwareVersion.major,
-	                           token_info->firmwareVersion.minor};
+	token->hardware_version = (libssig_token_version){
+		token_info->hardwareVersion.major,
+		token_info->hardwareVersion.minor
+	};
+	token->firmware_version = (libssig_token_version){
+		token_info->firmwareVersion.major,
+		token_info->firmwareVersion.minor
+	};
 	if (token_info->flags & CKF_CLOCK_ON_TOKEN) {
 		memcpy(
 		    token->utc_time,
@@ -175,22 +181,24 @@ static libssig_status token_from_info(
 }
 
 static libssig_status tokens_append(
-    libssig_tokens* tokens,
-    libssig_token*  token
+    libssig_token_list* tokens,
+    libssig_token*      token
 ) {
 	if (tokens->count >= SIZE_MAX / sizeof(*tokens->items)) {
 		return LIBSSIG_ERROR_MEMORY;
 	}
 
-	libssig_token* items =
-	    realloc(tokens->items, (tokens->count + 1) * sizeof(*items));
+	libssig_token* items = realloc(
+	    tokens->items,
+	    (tokens->count + 1) * sizeof(*items)
+	);
 	if (!items) {
 		return LIBSSIG_ERROR_MEMORY;
 	}
 
 	tokens->items = items;
 	tokens->items[tokens->count++] = *token;
-	*token = (libssig_token){0};
+	*token = (libssig_token){ 0 };
 	return LIBSSIG_OK;
 }
 
@@ -212,9 +220,9 @@ static libssig_status slot_is_hardware(
 }
 
 static libssig_status tokens_collect_one(
-    CK_FUNCTION_LIST* module,
-    CK_SLOT_ID        slot,
-    libssig_tokens*   tokens
+    CK_FUNCTION_LIST*   module,
+    CK_SLOT_ID          slot,
+    libssig_token_list* tokens
 ) {
 	CK_TOKEN_INFO token_info;
 	CK_RV         rv = module->C_GetTokenInfo(slot, &token_info);
@@ -228,7 +236,7 @@ static libssig_status tokens_collect_one(
 		return LIBSSIG_ERROR_PKCS11;
 	}
 
-	libssig_token  token = {0};
+	libssig_token  token = { 0 };
 	libssig_status status = token_from_info(&token_info, &token);
 	if (status != LIBSSIG_OK) {
 		return status;
@@ -240,10 +248,10 @@ static libssig_status tokens_collect_one(
 }
 
 static libssig_status slot_token_collect(
-    CK_FUNCTION_LIST* module,
-    CK_SLOT_ID        slot,
-    bool              hardware_only,
-    libssig_tokens*   tokens
+    CK_FUNCTION_LIST*   module,
+    CK_SLOT_ID          slot,
+    bool                hardware_only,
+    libssig_token_list* tokens
 ) {
 	if (!hardware_only) {
 		return tokens_collect_one(module, slot, tokens);
@@ -264,9 +272,9 @@ static libssig_status slot_token_collect(
 }
 
 static libssig_status module_tokens_collect(
-    CK_FUNCTION_LIST* module,
-    bool              hardware_only,
-    libssig_tokens*   tokens
+    CK_FUNCTION_LIST*   module,
+    bool                hardware_only,
+    libssig_token_list* tokens
 ) {
 	CK_SLOT_ID*    slots = NULL;
 	CK_ULONG       slot_count = 0;
@@ -288,7 +296,7 @@ static libssig_status module_tokens_collect(
 	return status;
 }
 
-void libssig_tokens_free(libssig_tokens* tokens) {
+void libssig_tokens_free(libssig_token_list* tokens) {
 	if (!tokens) {
 		return;
 	}
@@ -298,27 +306,30 @@ void libssig_tokens_free(libssig_tokens* tokens) {
 	}
 
 	free(tokens->items);
-	*tokens = (libssig_tokens){0};
+	*tokens = (libssig_token_list){ 0 };
 }
 
-libssig_status libssig_tokens_list(libssig_tokens* tokens, bool hardware_only) {
+libssig_status libssig_tokens(libssig_token_list* tokens, bool hardware_only) {
 	if (!tokens) {
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
 
-	*tokens = (libssig_tokens){0};
+	*tokens = (libssig_token_list){ 0 };
 
-	libssig_context ctx = {0};
+	libssig_context ctx = { 0 };
 	libssig_status  status = libssig_context_open(&ctx);
 
 	if (status != LIBSSIG_OK) {
 		return status;
 	}
 
-	libssig_tokens collected = {0};
+	libssig_token_list collected = { 0 };
 	for (size_t i = 0; ctx.modules[i] != NULL; ++i) {
-		status =
-		    module_tokens_collect(ctx.modules[i], hardware_only, &collected);
+		status = module_tokens_collect(
+		    ctx.modules[i],
+		    hardware_only,
+		    &collected
+		);
 		if (status != LIBSSIG_OK) {
 			break;
 		}
@@ -329,7 +340,7 @@ libssig_status libssig_tokens_list(libssig_tokens* tokens, bool hardware_only) {
 	if (status != LIBSSIG_OK) {
 		unsigned long ck_rv = collected.ck_rv;
 		libssig_tokens_free(&collected);
-		*tokens = (libssig_tokens){.ck_rv = ck_rv};
+		*tokens = (libssig_token_list){ .ck_rv = ck_rv };
 		return status;
 	}
 

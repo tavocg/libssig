@@ -38,3 +38,8 @@ add_test(NAME certificates COMMAND certificates_test)
 
 set_target_properties(tokens_list PROPERTIES OUTPUT_NAME list-tokens)
 set_target_properties(token_login PROPERTIES OUTPUT_NAME login-token)
+
+add_executable(version_test version_test.c)
+target_link_libraries(version_test PRIVATE libssig::ssig)
+target_compile_options(version_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME version COMMAND version_test)

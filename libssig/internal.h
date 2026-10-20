@@ -37,9 +37,9 @@ libssig_status libssig_session_login(
 CK_RV libssig_session_close(libssig_session* s);
 
 libssig_status libssig_certificates_collect(
-    libssig_session*      s,
-    libssig_certificates* certs,
-    CK_RV*                out_rv
+    libssig_session*          s,
+    libssig_certificate_list* certs,
+    CK_RV*                    out_rv
 );
 
 #endif

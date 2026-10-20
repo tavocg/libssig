@@ -35,7 +35,7 @@ typedef enum {
 typedef struct {
 	unsigned char major;
 	unsigned char minor;
-} libssig_version_info;
+} libssig_token_version;
 
 /* Memoria del resultado de certificados; liberar con libssig_certificates_free.
  */
@@ -58,7 +58,7 @@ typedef struct {
 	libssig_certificate* items;
 	size_t               count;
 	unsigned long        ck_rv;
-} libssig_certificates;
+} libssig_certificate_list;
 
 /* Las cadenas pertenecen al resultado y se liberan con libssig_tokens_free. */
 typedef struct {
@@ -86,14 +86,14 @@ typedef struct {
 	/* Sesiones de lectura/escritura; ~0UL si no se conoce la cantidad. */
 	unsigned long rw_session_count;
 
-	unsigned long        max_pin_len;
-	unsigned long        min_pin_len;
-	unsigned long        total_public_memory;
-	unsigned long        free_public_memory;
-	unsigned long        total_private_memory;
-	unsigned long        free_private_memory;
-	libssig_version_info hardware_version;
-	libssig_version_info firmware_version;
+	unsigned long         max_pin_len;
+	unsigned long         min_pin_len;
+	unsigned long         total_public_memory;
+	unsigned long         free_public_memory;
+	unsigned long         total_private_memory;
+	unsigned long         free_private_memory;
+	libssig_token_version hardware_version;
+	libssig_token_version firmware_version;
 
 	char utc_time[17];
 } libssig_token;
@@ -102,20 +102,21 @@ typedef struct {
 	libssig_token* items;
 	size_t         count;
 	unsigned long  ck_rv;
-} libssig_tokens;
+} libssig_token_list;
 
-void libssig_version_get(int* out_major, int* out_minor, int* out_patch);
+/* Escribe la versión de la biblioteca cargada; cada salida puede ser NULL. */
+void libssig_version(int* out_major, int* out_minor, int* out_patch);
 
-libssig_status libssig_tokens_list(libssig_tokens* tokens, bool hardware_only);
+libssig_status libssig_tokens(libssig_token_list* tokens, bool hardware_only);
 
-void libssig_tokens_free(libssig_tokens* tokens);
+void libssig_tokens_free(libssig_token_list* tokens);
 
-libssig_status libssig_certificates_list(
-    const libssig_token*  token,
-    libssig_certificates* certs
+libssig_status libssig_certificates(
+    const libssig_token*      token,
+    libssig_certificate_list* certs
 );
 
-void libssig_certificates_free(libssig_certificates* certs);
+void libssig_certificates_free(libssig_certificate_list* certs);
 
 #ifdef __cplusplus
 }

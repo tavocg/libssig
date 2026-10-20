@@ -99,9 +99,9 @@ int main(void) {
 	module.C_FindObjects = mock_objects_find;
 	module.C_FindObjectsFinal = mock_objects_find_final;
 	module.C_GetAttributeValue = mock_attribute_get;
-	libssig_session      s = {.module = &module, .open = true};
-	libssig_certificates certs = {0};
-	CK_RV                rv = CKR_OK;
+	libssig_session          s = {.module = &module, .open = true};
+	libssig_certificate_list certs = {0};
+	CK_RV                    rv = CKR_OK;
 	CHECK(libssig_certificates_collect(&s, &certs, &rv) == LIBSSIG_OK);
 	CHECK(finalize_count == 1 && certs.count == 2);
 	CHECK(certs.items[0].id_len == 3 && certs.items[0].id[1] == 0xff);
@@ -142,10 +142,10 @@ int main(void) {
 	);
 	CHECK(rv == CKR_GENERAL_ERROR && !certs.items);
 	CHECK(finalize_count == 7);
-	CHECK(libssig_certificates_list(NULL, &certs) == LIBSSIG_ERROR_ARGUMENT);
+	CHECK(libssig_certificates(NULL, &certs) == LIBSSIG_ERROR_ARGUMENT);
 	libssig_token token = {0};
-	CHECK(libssig_certificates_list(&token, &certs) == LIBSSIG_ERROR_ARGUMENT);
-	CHECK(libssig_certificates_list(&token, NULL) == LIBSSIG_ERROR_ARGUMENT);
+	CHECK(libssig_certificates(&token, &certs) == LIBSSIG_ERROR_ARGUMENT);
+	CHECK(libssig_certificates(&token, NULL) == LIBSSIG_ERROR_ARGUMENT);
 	libssig_certificates_free(NULL);
 	return 0;
 }

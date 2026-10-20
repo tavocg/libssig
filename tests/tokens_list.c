@@ -104,7 +104,7 @@ static void hex_print(const unsigned char* data, size_t len) {
 	putchar('"');
 }
 
-static void certificates_print(const libssig_certificates* certs) {
+static void certificates_print(const libssig_certificate_list* certs) {
 	fputs("      \"certificates\": [", stdout);
 	for (size_t i = 0; i < certs->count; ++i) {
 		const libssig_certificate* cert = &certs->items[i];
@@ -127,8 +127,8 @@ static void certificates_print(const libssig_certificates* certs) {
 }
 
 static void token_print(
-    const libssig_token*        token,
-    const libssig_certificates* certs
+    const libssig_token*            token,
+    const libssig_certificate_list* certs
 ) {
 	puts("    {");
 	string_field_print("uri", token->uri);
@@ -179,8 +179,8 @@ static void token_print(
 }
 
 int main(void) {
-	libssig_tokens tokens = {0};
-	libssig_status status = libssig_tokens_list(&tokens, true);
+	libssig_token_list tokens = {0};
+	libssig_status     status = libssig_tokens(&tokens, true);
 
 	if (status != LIBSSIG_OK) {
 		printf(
@@ -194,8 +194,8 @@ int main(void) {
 
 	printf("{\n  \"count\": %zu,\n  \"tokens\": [\n", tokens.count);
 	for (size_t i = 0; i < tokens.count; ++i) {
-		libssig_certificates certs = {0};
-		status = libssig_certificates_list(&tokens.items[i], &certs);
+		libssig_certificate_list certs = {0};
+		status = libssig_certificates(&tokens.items[i], &certs);
 		if (status != LIBSSIG_OK) {
 			fprintf(
 			    stderr,
