@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-#include <libssig/verify_internal.h>
+#include <libssig/ocsp_internal.h>
+#include <libssig/timestamp_internal.h>
 #include <limits.h>
 #include <openssl/cms.h>
 #include <openssl/cmserr.h>
@@ -17,6 +18,7 @@ void libssig_verify_free(libssig_verify_result* result) {
 	for (size_t i = 0; i < result->count; ++i) {
 		free(result->signers[i].cert_der);
 		free(result->signers[i].mime_type);
+		free(result->signers[i].timestamp.cert_der);
 	}
 	free(result->signers);
 	*result = (libssig_verify_result){0};
@@ -283,6 +285,20 @@ static libssig_status verification_run(
 	    (params->ca_data || (params->options & LIBSSIG_VERIFY_SYSTEM_TRUST))) {
 		status = libssig_verify_trust_check(cms, params, roots, certs, result);
 	}
+	if (status == LIBSSIG_OK || status == LIBSSIG_ERROR_TRUST) {
+		libssig_status stamps = libssig_verify_timestamps(cms, params, result);
+		if (stamps != LIBSSIG_OK) {
+			status = stamps;
+		}
+	}
+	if (status == LIBSSIG_OK || status == LIBSSIG_ERROR_TRUST ||
+	    status == LIBSSIG_ERROR_TIMESTAMP) {
+		libssig_status revocation = libssig_verify_ocsp(params, result);
+		if (revocation != LIBSSIG_OK && (status != LIBSSIG_ERROR_TIMESTAMP ||
+		                                 revocation != LIBSSIG_ERROR_OCSP)) {
+			status = revocation;
+		}
+	}
 	sk_X509_pop_free(embedded, X509_free);
 	sk_X509_pop_free(certs, X509_free);
 	sk_X509_pop_free(roots, X509_free);
@@ -302,15 +318,26 @@ libssig_status libssig_verify(
 	}
 
 	*result = (libssig_verify_result){0};
-	if (!params || !params->data || !params->data_len ||
-	    params->data_len > LONG_MAX || params->content_len > INT_MAX ||
+	if (!params || !libssig_verify_ocsp_params_valid(params) || !params->data ||
+	    !params->data_len || params->data_len > LONG_MAX ||
+	    params->content_len > INT_MAX ||
 	    (!params->content && params->content_len) ||
-	    (params->options & ~LIBSSIG_VERIFY_SYSTEM_TRUST) ||
+	    (params->options &
+	     ~(LIBSSIG_VERIFY_SYSTEM_TRUST | LIBSSIG_VERIFY_TSA_SYSTEM_TRUST |
+	       LIBSSIG_VERIFY_REQUIRE_TIMESTAMP | LIBSSIG_VERIFY_REQUIRE_OCSP |
+	       LIBSSIG_VERIFY_REQUIRE_TSA_OCSP)) ||
 	    !bundle_valid(params->ca_data, params->ca_data_len) ||
 	    !bundle_valid(
 	        params->intermediates_data,
 	        params->intermediates_data_len
 	    ) ||
+	    !bundle_valid(params->tsa_ca_data, params->tsa_ca_data_len) ||
+	    !bundle_valid(
+	        params->tsa_intermediates_data,
+	        params->tsa_intermediates_data_len
+	    ) ||
+	    (params->tsa_intermediates_data && !params->tsa_ca_data &&
+	     !(params->options & LIBSSIG_VERIFY_TSA_SYSTEM_TRUST)) ||
 	    (params->intermediates_data && !params->ca_data &&
 	     !(params->options & LIBSSIG_VERIFY_SYSTEM_TRUST))) {
 		return LIBSSIG_ERROR_ARGUMENT;
@@ -331,7 +358,9 @@ libssig_status libssig_verify(
 	                            ? verification_run(cms, params, result)
 	                            : LIBSSIG_ERROR_UNSUPPORTED;
 	CMS_ContentInfo_free(cms);
-	if (status != LIBSSIG_OK && status != LIBSSIG_ERROR_TRUST) {
+	if (status != LIBSSIG_OK && status != LIBSSIG_ERROR_TRUST &&
+	    status != LIBSSIG_ERROR_TIMESTAMP && status != LIBSSIG_ERROR_OCSP &&
+	    status != LIBSSIG_ERROR_REVOKED) {
 		libssig_verify_free(result);
 	}
 	return status;

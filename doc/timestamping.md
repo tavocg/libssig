@@ -118,10 +118,11 @@ an output with a structure holding its input bytes. Errors leave outputs empty.
 `LIBSSIG_ERROR_AMBIGUOUS` indicates an existing timestamp for that signer.
 
 No OCSP, CRL, certificate fetching, LT/LTA evidence, or historical trust validation
-is performed. TSA chains are validated at the current time. `libssig_verify()`
-continues to verify the document signature and its signed attributes; it does
-not yet validate persisted unsigned timestamp tokens. Successful timestamp
-incorporation establishes the checks above at incorporation time only.
+is performed. TSA chains are validated at the current time. `libssig_verify()` also validates persisted signature timestamp tokens, without
+the original TSQ/TSR. Configure its independent `tsa_ca_data` and optional
+`LIBSSIG_VERIFY_TSA_SYSTEM_TRUST` to validate TSA trust, and use
+`LIBSSIG_VERIFY_REQUIRE_TIMESTAMP` to reject missing timestamps. See
+[verification](verification.md#persisted-signature-timestamps).
 
 ## Automated example
 

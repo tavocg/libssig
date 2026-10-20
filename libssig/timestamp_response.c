@@ -34,8 +34,7 @@ static libssig_status trust_load(
 	return status;
 }
 
-static bool response_time_valid(TS_RESP* response) {
-	TS_TST_INFO*                info = TS_RESP_get_tst_info(response);
+bool libssig_timestamp_time_valid(TS_TST_INFO* info) {
 	const ASN1_GENERALIZEDTIME* generated = info ? TS_TST_INFO_get_time(info)
 	                                             : NULL;
 	time_t                      now = time(NULL);
@@ -89,7 +88,7 @@ libssig_status libssig_timestamp_response(
 		return LIBSSIG_ERROR_TIMESTAMP;
 	}
 
-	if (!response_time_valid(response)) {
+	if (!libssig_timestamp_time_valid(TS_RESP_get_tst_info(response))) {
 		return LIBSSIG_ERROR_VERIFY;
 	}
 

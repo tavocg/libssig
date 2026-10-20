@@ -97,9 +97,66 @@ trust option,
 rejected. Unknown option bits return `LIBSSIG_ERROR_ARGUMENT`.
 
 Verification does not download missing intermediates, contact OCSP, fetch CRLs,
-or apply document-signing EKU or national policy requirements. Trust checks use
+or apply document-signing EKU or national policy requirements. It can validate
+OCSP responses supplied by the application; see [OCSP](ocsp.md). Trust checks use
 the current time, not the signer's claimed `signingTime`. A valid result does
 not establish revocation status or a trusted signing time.
+
+## Persisted signature timestamps
+
+Every present `signature-time-stamp` attribute is checked automatically, with
+no original RFC 3161 request or response required. An invalid or malformed stamp
+returns `LIBSSIG_ERROR_TIMESTAMP`, while preserving `signature_valid` and the
+original document signers. This means a valid document signature can coexist
+with an invalid timestamp. Duplicate timestamp attributes or multiple values
+are rejected; one timestamp per signer is supported.
+
+Each `result.signers[i].timestamp` exposes:
+
+| Field | Meaning |
+| --- | --- |
+| `present` | A timestamp attribute exists |
+| `valid` | Imprint matches this document signature; timestamp signature, ESS binding, TSA certificate purpose, TSA name if present, version and generation time pass |
+| `status` | Per-timestamp status; `ERROR_NOT_FOUND` when absent |
+| `time` | UTC ISO 8601 string at second precision, only if valid; fractional seconds are not returned |
+| `cert_der`, `cert_der_len` | Copied TSA signer certificate, owned by the result |
+| `trust_checked`, `trusted`, `trust_error` | Independent TSA chain result and numeric X.509 error |
+
+`valid` alone does not authenticate the claimed time to a trusted authority.
+Configure TSA trust independently using `tsa_ca_data`/`tsa_ca_data_len`,
+`tsa_intermediates_data`/`tsa_intermediates_data_len`, and optionally
+`LIBSSIG_VERIFY_TSA_SYSTEM_TRUST`. The document's `ca_data` and `SYSTEM_TRUST`
+are never inherited by TSA verification. TSA intermediates require a TSA trust
+source. Certificate input formats, ownership and limits match the document
+certificate inputs.
+
+```c
+libssig_verify_params params = {
+    .data = timestamped_bytes,
+    .data_len = timestamped_len,
+    .tsa_ca_data = tsa_roots_pem,
+    .tsa_ca_data_len = tsa_roots_pem_len,
+    .tsa_intermediates_data = tsa_intermediates_pem,
+    .tsa_intermediates_data_len = tsa_intermediates_pem_len,
+    .options = LIBSSIG_VERIFY_REQUIRE_TIMESTAMP,
+};
+```
+
+`LIBSSIG_VERIFY_REQUIRE_TIMESTAMP` requires a valid timestamp on every signer;
+otherwise missing stamps are reported without failing the call. It does not
+implicitly enable TSA trust. With a TSA trust source, an untrusted chain returns
+`LIBSSIG_ERROR_TRUST` while retaining `timestamp.valid = true` when cryptographic
+checks passed. Top-level `trust_checked` and `trusted` refer only to document
+signers; consult the nested timestamp fields for TSA trust. All timestamp checks
+still run when the document signer's trust check fails. A bad timestamp takes
+precedence over a trust failure in the returned status; individual results
+retain the separate outcomes.
+
+Timestamp cryptographic verification supports SHA-256/384/512 message imprints.
+Future generation times beyond 300 seconds are rejected. Certificate trust is
+checked at the current time, including for the TSA. Without supplied OCSP evidence no revocation checking is performed, and there
+is no historical validation; an expired TSA can have `valid = true` and a failed
+current trust check. These checks do not establish CAdES LT/LTA compliance.
 
 ## Errors
 
@@ -110,10 +167,14 @@ not establish revocation status or a trusted signing time.
 | `LIBSSIG_ERROR_CONTENT_REQUIRED` | Detached signature without the original content |
 | `LIBSSIG_ERROR_VERIFY` | Signature/content mismatch, missing signer certificate, or invalid ESS/MIME attribute |
 | `LIBSSIG_ERROR_UNSUPPORTED` | Unsupported container type or an algorithm reported unsupported by OpenSSL |
-| `LIBSSIG_ERROR_TRUST` | Valid signature, but certificate trust could not be established |
+| `LIBSSIG_ERROR_TRUST` | Valid document signature, but document/TSA certificate trust could not be established |
+| `LIBSSIG_ERROR_OCSP` | Supplied OCSP is invalid, unknown, unavailable or required evidence is missing |
+| `LIBSSIG_ERROR_REVOKED` | Authenticated OCSP says a document/TSA certificate is revoked |
+| `LIBSSIG_ERROR_TIMESTAMP` | Valid document signature, but an invalid/malformed timestamp or a required timestamp is absent |
 
 Memory and other local cryptographic failures use `LIBSSIG_ERROR_MEMORY` and
-`LIBSSIG_ERROR_CRYPTO`. Except for `ERROR_TRUST`, failures leave the result empty.
+`LIBSSIG_ERROR_CRYPTO`. Except for `ERROR_TRUST`, `ERROR_TIMESTAMP`, `ERROR_OCSP` and `ERROR_REVOKED`,
+failures leave the result empty.
 External content is limited to `INT_MAX` bytes, containers to `LONG_MAX` bytes;
 verification and parsing take place in memory.
 
@@ -132,6 +193,10 @@ verification and parsing take place in memory.
 # Require your own authorities, without loading system roots.
 ./build/tests/verify-file --ca-file raices.pem \
   --intermediates intermediarios.pem documento.p7m
+
+# Verify a stored timestamp and require trusted TSA certificates.
+./build/tests/verify-file --require-timestamp --tsa-ca-file tsa-raices.pem \
+  --tsa-intermediates tsa-intermediarios.pem documento.p7m
 
 # Combine custom and system authorities.
 ./build/tests/verify-file --system-trust --ca-file raices.pem \

@@ -19,4 +19,14 @@ libssig_status libssig_timestamp_response(
     TS_REQ*                         request,
     TS_RESP*                        response
 );
+bool libssig_timestamp_time_valid(TS_TST_INFO* info);
+bool libssig_timestamp_imprint_matches(
+    TS_MSG_IMPRINT* imprint,
+    CMS_SignerInfo* signer
+);
+libssig_status libssig_verify_timestamps(
+    CMS_ContentInfo*             cms,
+    const libssig_verify_params* params,
+    libssig_verify_result*       result
+);
 #endif

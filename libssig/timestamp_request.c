@@ -107,8 +107,10 @@ static TS_MSG_IMPRINT* imprint_create(
 	return imprint;
 }
 
-bool libssig_timestamp_imprint(TS_REQ* request, CMS_SignerInfo* signer) {
-	TS_MSG_IMPRINT*    imprint = TS_REQ_get_msg_imprint(request);
+bool libssig_timestamp_imprint_matches(
+    TS_MSG_IMPRINT* imprint,
+    CMS_SignerInfo* signer
+) {
 	X509_ALGOR*        algorithm = TS_MSG_IMPRINT_get_algo(imprint);
 	const ASN1_OBJECT* oid = NULL;
 	int                type;
@@ -134,6 +136,13 @@ bool libssig_timestamp_imprint(TS_REQ* request, CMS_SignerInfo* signer) {
 	          ) == 0;
 	TS_MSG_IMPRINT_free(expected);
 	return ok;
+}
+
+bool libssig_timestamp_imprint(TS_REQ* request, CMS_SignerInfo* signer) {
+	return libssig_timestamp_imprint_matches(
+	    TS_REQ_get_msg_imprint(request),
+	    signer
+	);
 }
 
 static bool nonce_set(TS_REQ* request) {

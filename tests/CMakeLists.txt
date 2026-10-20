@@ -135,6 +135,57 @@ add_test(NAME timestamp
     COMMAND ${CMAKE_COMMAND}
         "-DSIGN_TEST=$<TARGET_FILE:sign_test>"
         "-DTIMESTAMP_TEST=$<TARGET_FILE:timestamp_test>"
+        "-DPERSISTED_TEST=$<TARGET_FILE:persisted_timestamp_test>"
+        "-DVERIFY_FILE=$<TARGET_FILE:verify_file>"
         "-DOPENSSL=${OPENSSL_EXECUTABLE}"
         "-DFIXTURES=${CMAKE_CURRENT_BINARY_DIR}/timestamp-fixtures"
         -P ${CMAKE_CURRENT_SOURCE_DIR}/timestamp_verify.cmake)
+
+add_executable(persisted_timestamp_test persisted_timestamp_test.c)
+target_link_libraries(persisted_timestamp_test PRIVATE libssig::ssig OpenSSL::Crypto)
+target_compile_options(persisted_timestamp_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+
+add_executable(ocsp_test ocsp_test.c)
+target_link_libraries(ocsp_test PRIVATE libssig::ssig OpenSSL::Crypto)
+target_compile_options(ocsp_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME ocsp COMMAND ocsp_test)
+
+add_executable(ocsp_file ocsp_file.c)
+target_link_libraries(ocsp_file PRIVATE libssig::ssig)
+target_compile_options(ocsp_file PRIVATE -Wall -Wextra -Wpedantic -Werror)
+set_target_properties(ocsp_file PROPERTIES OUTPUT_NAME ocsp-file)
+add_test(NAME ocsp_cli
+    COMMAND ${CMAKE_COMMAND}
+        "-DOCSP_TEST=$<TARGET_FILE:ocsp_test>"
+        "-DOCSP_FILE=$<TARGET_FILE:ocsp_file>"
+        "-DOPENSSL=${OPENSSL_EXECUTABLE}"
+        "-DFIXTURES=${CMAKE_CURRENT_BINARY_DIR}/ocsp-fixtures"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/ocsp_cli.cmake)
+
+add_executable(timestamp_file timestamp_file.c)
+target_link_libraries(timestamp_file PRIVATE libssig::ssig)
+target_compile_options(timestamp_file PRIVATE -Wall -Wextra -Wpedantic -Werror)
+set_target_properties(timestamp_file PROPERTIES OUTPUT_NAME timestamp-file)
+
+option(LIBSSIG_TEST_TSA_SINPE "Contact the real Costa Rican TSA (network test)" OFF)
+set(LIBSSIG_TSA_SINPE_CA_FILE "" CACHE FILEPATH "Trusted TSA-SINPE roots (PEM/DER)")
+set(LIBSSIG_TSA_SINPE_INTERMEDIATES_FILE "" CACHE FILEPATH "Untrusted TSA intermediates")
+set(LIBSSIG_TSA_SINPE_URL "http://tsa.sinpe.fi.cr/tsaHttp/" CACHE STRING "TSA-SINPE RFC 3161 URL")
+if(LIBSSIG_TEST_TSA_SINPE)
+    if(NOT EXISTS "${LIBSSIG_TSA_SINPE_CA_FILE}")
+        message(FATAL_ERROR "Provide LIBSSIG_TSA_SINPE_CA_FILE from a trusted official source")
+    endif()
+    find_program(CURL_EXECUTABLE curl REQUIRED)
+    add_test(NAME tsa_sinpe
+        COMMAND ${CMAKE_COMMAND}
+            "-DSIGN_TEST=$<TARGET_FILE:sign_test>"
+            "-DTIMESTAMP_FILE=$<TARGET_FILE:timestamp_file>"
+            "-DVERIFY_FILE=$<TARGET_FILE:verify_file>"
+            "-DCURL=${CURL_EXECUTABLE}"
+            "-DURL=${LIBSSIG_TSA_SINPE_URL}"
+            "-DROOTS=${LIBSSIG_TSA_SINPE_CA_FILE}"
+            "-DINTERMEDIATES=${LIBSSIG_TSA_SINPE_INTERMEDIATES_FILE}"
+            "-DFIXTURES=${CMAKE_CURRENT_BINARY_DIR}/tsa-sinpe-fixtures"
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tsa_sinpe.cmake)
+    set_tests_properties(tsa_sinpe PROPERTIES LABELS "network;manual" TIMEOUT 90 RUN_SERIAL TRUE)
+endif()

@@ -3,6 +3,7 @@
 #include <libssig/libssig.h>
 #include <openssl/cms.h>
 #include <openssl/err.h>
+#include <openssl/ocsp.h>
 #include <openssl/pem.h>
 #include <openssl/ts.h>
 #include <openssl/x509v3.h>
@@ -377,7 +378,176 @@ static int token_check(
 	libssig_verify_result result = {0};
 	CHECK(libssig_verify(&verify, &result) == LIBSSIG_OK);
 	CHECK(result.signature_valid);
+	CHECK(
+	    result.signers[0].timestamp.present && result.signers[0].timestamp.valid
+	);
+	CHECK(
+	    !result.signers[0].timestamp.trust_checked &&
+	    !result.signers[0].timestamp.trusted
+	);
+	CHECK(strlen(result.signers[0].timestamp.time) == 20);
+	CHECK(result.signers[0].timestamp.cert_der_len > 0);
 	libssig_verify_free(&result);
+	verify.tsa_ca_data = roots.data;
+	verify.tsa_ca_data_len = roots.len;
+	verify.options = LIBSSIG_VERIFY_REQUIRE_TIMESTAMP;
+	CHECK(libssig_verify(&verify, &result) == LIBSSIG_OK);
+	CHECK(
+	    result.signers[0].timestamp.trust_checked &&
+	    result.signers[0].timestamp.trusted
+	);
+	CHECK(!result.trust_checked && !result.trusted);
+	libssig_verify_free(&result);
+	return 0;
+}
+
+static int expired_fixture_write(libssig_timestamp_params params) {
+	X509* saved = tsa;
+	tsa = X509_dup(saved);
+	CHECK(tsa && X509_gmtime_adj(X509_getm_notAfter(tsa), -60));
+	CHECK(X509_sign(tsa, root_key, EVP_sha256()));
+	libssig_signature request = {
+	    .data = (unsigned char*)params.request,
+	    .len = params.request_len
+	};
+	TS_RESP* response = response_create(&request, false);
+	CHECK(response && TS_RESP_get_token(response));
+	X509_free(tsa);
+	tsa = saved;
+	const unsigned char* cursor = params.data;
+	CMS_ContentInfo*     cms = d2i_CMS_ContentInfo(
+        NULL,
+        &cursor,
+        (long)params.data_len
+    );
+	CHECK(cms);
+	unsigned char* token = NULL;
+	int            len = i2d_PKCS7(TS_RESP_get_token(response), &token);
+	CHECK(len > 0);
+	CMS_SignerInfo* signer = sk_CMS_SignerInfo_value(
+	    CMS_get0_SignerInfos(cms),
+	    0
+	);
+	CHECK(CMS_unsigned_add1_attr_by_NID(
+	    signer,
+	    NID_id_smime_aa_timeStampToken,
+	    V_ASN1_SEQUENCE,
+	    token,
+	    len
+	));
+	OPENSSL_free(token);
+	unsigned char* encoded = NULL;
+	len = i2d_CMS_ContentInfo(cms, &encoded);
+	CHECK(
+	    len > 0 &&
+	    file_write("timestamp-expired.p7m", encoded, (size_t)len) == 0
+	);
+	OPENSSL_free(encoded);
+	TS_RESP_free(response);
+	CMS_ContentInfo_free(cms);
+	return 0;
+}
+
+static int tsa_ocsp_check(const libssig_signature* signature) {
+	unsigned char* cert = NULL;
+	int            cert_len = i2d_X509(tsa, &cert);
+	CHECK(cert_len > 0);
+	libssig_ocsp_request_params request = {
+	    .cert_data = cert,
+	    .cert_data_len = (size_t)cert_len,
+	    .issuer_data = roots.data,
+	    .issuer_data_len = roots.len,
+	};
+	libssig_ocsp_query query = {0};
+	CHECK(libssig_ocsp_request(&request, &query) == LIBSSIG_OK);
+	const unsigned char* cursor = query.data;
+	OCSP_REQUEST* decoded = d2i_OCSP_REQUEST(NULL, &cursor, (long)query.len);
+	CHECK(decoded);
+	OCSP_CERTID* id = OCSP_onereq_get0_id(OCSP_request_onereq_get0(decoded, 0));
+	ASN1_TIME*   current = X509_gmtime_adj(NULL, -60);
+	ASN1_TIME*   next = X509_gmtime_adj(NULL, 3600);
+	ASN1_TIME*   revoked = X509_gmtime_adj(NULL, -120);
+	CHECK(current && next && revoked);
+	libssig_ocsp_evidence evidence = {
+	    .tsa = true,
+	    .issuer_data = roots.data,
+	    .issuer_data_len = roots.len,
+	    .request = query.data,
+	    .request_len = query.len,
+	};
+	libssig_verify_params params = {
+	    .data = signature->data,
+	    .data_len = signature->len,
+	    .tsa_ca_data = roots.data,
+	    .tsa_ca_data_len = roots.len,
+	    .ocsp = &evidence,
+	    .ocsp_count = 1,
+	    .options = LIBSSIG_VERIFY_REQUIRE_TSA_OCSP,
+	};
+	for (int i = 0; i < 3; ++i) {
+		OCSP_BASICRESP* basic = OCSP_BASICRESP_new();
+		CHECK(
+		    basic && OCSP_basic_add1_status(
+		                 basic,
+		                 id,
+		                 i,
+		                 OCSP_REVOKED_STATUS_KEYCOMPROMISE,
+		                 i == V_OCSP_CERTSTATUS_REVOKED ? revoked : NULL,
+		                 current,
+		                 next
+		             )
+		);
+		CHECK(
+		    OCSP_copy_nonce(basic, decoded) &&
+		    OCSP_basic_sign(basic, root, root_key, EVP_sha256(), NULL, 0)
+		);
+		OCSP_RESPONSE* response = OCSP_response_create(
+		    OCSP_RESPONSE_STATUS_SUCCESSFUL,
+		    basic
+		);
+		CHECK(response);
+		unsigned char* encoded = NULL;
+		int            len = i2d_OCSP_RESPONSE(response, &encoded);
+		CHECK(len > 0);
+		evidence.response = encoded;
+		evidence.response_len = (size_t)len;
+		libssig_verify_result result = {0};
+		libssig_status expected = i == V_OCSP_CERTSTATUS_GOOD ? LIBSSIG_OK
+		                          : i == V_OCSP_CERTSTATUS_REVOKED
+		                              ? LIBSSIG_ERROR_REVOKED
+		                              : LIBSSIG_ERROR_OCSP;
+		CHECK(libssig_verify(&params, &result) == expected);
+		CHECK(
+		    result.signature_valid && result.signers[0].timestamp.valid &&
+		    result.signers[0].timestamp.trusted
+		);
+		CHECK(result.signers[0].timestamp.ocsp.valid);
+		CHECK(
+		    result.signers[0].timestamp.ocsp.status ==
+		    (i == 0   ? LIBSSIG_OCSP_GOOD
+		     : i == 1 ? LIBSSIG_OCSP_REVOKED
+		              : LIBSSIG_OCSP_UNKNOWN)
+		);
+		libssig_verify_free(&result);
+		OPENSSL_free(encoded);
+		OCSP_RESPONSE_free(response);
+		OCSP_BASICRESP_free(basic);
+	}
+	params.ocsp = NULL;
+	params.ocsp_count = 0;
+	libssig_verify_result result = {0};
+	CHECK(libssig_verify(&params, &result) == LIBSSIG_ERROR_OCSP);
+	CHECK(
+	    result.signature_valid &&
+	    result.signers[0].timestamp.ocsp.error == LIBSSIG_ERROR_NOT_FOUND
+	);
+	libssig_verify_free(&result);
+	ASN1_TIME_free(current);
+	ASN1_TIME_free(next);
+	ASN1_TIME_free(revoked);
+	OCSP_REQUEST_free(decoded);
+	libssig_ocsp_request_free(&query);
+	OPENSSL_free(cert);
 	return 0;
 }
 
@@ -434,6 +604,8 @@ static int roundtrip_check(int algo, int hash, bool detached) {
 	params.data_len = original.len;
 	if (!algo && !hash && !detached) {
 		CHECK(negative_check(params, query) == 0);
+		CHECK(expired_fixture_write(params) == 0);
+		CHECK(tsa_ocsp_check(&output) == 0);
 		char path[4096];
 		snprintf(path, sizeof(path), "%s/tsa-root.pem", directory);
 		CHECK(setenv("SSL_CERT_FILE", path, 1) == 0);
@@ -448,6 +620,11 @@ static int roundtrip_check(int algo, int hash, bool detached) {
 		CHECK(file_write("timestamp.tsq", request.data, request.len) == 0);
 		CHECK(file_write("timestamp.tsr", encoded.data, encoded.len) == 0);
 		CHECK(file_write("timestamped.p7m", output.data, output.len) == 0);
+	}
+	if (!algo && hash == 1 && !detached) {
+		CHECK(
+		    file_write("timestamped-other.p7m", output.data, output.len) == 0
+		);
 	}
 	libssig_signature_free(&output);
 	libssig_signature_free(&request);

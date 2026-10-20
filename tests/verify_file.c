@@ -47,7 +47,13 @@ static const char* status_text(libssig_status status) {
 		return "La firma, el contenido o los atributos no son válidos.";
 	case LIBSSIG_ERROR_TRUST:
 		return "Firma válida; no se pudo validar la confianza de todos los "
-		       "firmantes.";
+		       "firmantes o TSA.";
+	case LIBSSIG_ERROR_REVOKED:
+		return "Un certificado está revocado.";
+	case LIBSSIG_ERROR_OCSP:
+		return "OCSP no pudo establecer un estado no revocado.";
+	case LIBSSIG_ERROR_TIMESTAMP:
+		return "Sello de tiempo inválido o ausente cuando se exige.";
 	case LIBSSIG_ERROR_FORMAT:
 		return "Firma CMS/CAdES o certificados PEM/DER malformados.";
 	case LIBSSIG_ERROR_ARGUMENT:
@@ -56,6 +62,47 @@ static const char* status_text(libssig_status status) {
 	default:
 		return "No se pudo verificar la firma.";
 	}
+}
+
+static void ocsp_print(const char* target, const libssig_ocsp_result* result) {
+	if (result->error == LIBSSIG_ERROR_NOT_FOUND) {
+		return;
+	}
+	const char* names[] =
+	    {"consulta fallida", "no revocado", "revocado", "desconocido"};
+	printf(
+	    "OCSP %s: %s (error=%d).\n",
+	    target,
+	    names[result->status],
+	    (int)result->error
+	);
+}
+
+static void timestamp_print(const libssig_verify_timestamp* stamp) {
+	if (!stamp->present) {
+		puts("Sello: ausente.");
+		return;
+	}
+
+	printf(
+	    "Sello: %s (status=%d).\n",
+	    stamp->valid ? "válido" : "inválido",
+	    (int)stamp->status
+	);
+	if (stamp->valid) {
+		printf("Fecha del sello: %s\n", stamp->time);
+	}
+	printf(
+	    "Confianza TSA: %s",
+	    !stamp->trust_checked ? "no comprobada"
+	    : stamp->trusted      ? "válida"
+	                          : "fallida"
+	);
+	if (stamp->trust_checked) {
+		printf(" (error X.509=%ld)", stamp->trust_error);
+	}
+	puts(".");
+	ocsp_print("TSA", &stamp->ocsp);
 }
 
 static void result_print(const libssig_verify_result* result) {
@@ -79,6 +126,8 @@ static void result_print(const libssig_verify_result* result) {
 		if (result->signers[i].mime_type) {
 			printf("MIME: %s\n", result->signers[i].mime_type);
 		}
+		ocsp_print("firmante", &result->signers[i].ocsp);
+		timestamp_print(&result->signers[i].timestamp);
 	}
 }
 
@@ -86,56 +135,81 @@ static void usage_print(const char* program, FILE* output) {
 	fprintf(
 	    output,
 	    "Uso: %s [--system-trust] [--ca-file RAICES.pem] "
-	    "[--intermediates INTERMEDIARIOS.pem] FIRMA [CONTENIDO_ORIGINAL]\n",
+	    "[--intermediates INTERMEDIARIOS.pem] [--require-timestamp] "
+	    "[--tsa-system-trust] [--tsa-ca-file RAICES.pem] "
+	    "[--tsa-intermediates INTERMEDIARIOS.pem] FIRMA [CONTENIDO_ORIGINAL]\n",
 	    program
 	);
+}
+
+static unsigned int option_flag(const char* arg) {
+	if (!strcmp(arg, "--system-trust")) {
+		return LIBSSIG_VERIFY_SYSTEM_TRUST;
+	}
+
+	if (!strcmp(arg, "--tsa-system-trust")) {
+		return LIBSSIG_VERIFY_TSA_SYSTEM_TRUST;
+	}
+
+	return !strcmp(arg, "--require-timestamp")
+	           ? LIBSSIG_VERIFY_REQUIRE_TIMESTAMP
+	           : 0;
 }
 
 static int options_parse(
     int                    argc,
     char**                 argv,
     libssig_verify_params* params,
-    const char**           ca_path,
-    const char**           intermediates_path
+    const char*            paths[4]
 ) {
+	const char* names[] = {
+	    "--ca-file",
+	    "--intermediates",
+	    "--tsa-ca-file",
+	    "--tsa-intermediates"
+	};
 	int i = 1;
 	while (i < argc && argv[i][0] == '-') {
 		if (!strcmp(argv[i], "--")) {
 			return i + 1;
 		}
 
-		if (!strcmp(argv[i], "--system-trust")) {
-			params->options |= LIBSSIG_VERIFY_SYSTEM_TRUST;
+		unsigned int flag = option_flag(argv[i]);
+		if (flag) {
+			params->options |= flag;
 			++i;
 			continue;
 		}
 
-		const char** path = !strcmp(argv[i], "--ca-file") ? ca_path
-		                    : !strcmp(argv[i], "--intermediates")
-		                        ? intermediates_path
-		                        : NULL;
-		if (!path || *path || i + 1 >= argc || !argv[i + 1][0] ||
+		size_t j = 0;
+		while (j < 4 && strcmp(argv[i], names[j])) {
+			++j;
+		}
+
+		if (j == 4 || paths[j] || i + 1 >= argc || !argv[i + 1][0] ||
 		    !strncmp(argv[i + 1], "--", 2)) {
 			return -1;
 		}
-		*path = argv[i + 1];
+		paths[j] = argv[i + 1];
 		i += 2;
 	}
 	return i;
 }
 
 static bool inputs_read(
-    const char* const      paths[4],
-    unsigned char*         buffers[4],
+    const char* const      paths[6],
+    unsigned char*         buffers[6],
     libssig_verify_params* params
 ) {
 	size_t* lens[] = {
 	    &params->data_len,
 	    &params->content_len,
 	    &params->ca_data_len,
-	    &params->intermediates_data_len
+	    &params->intermediates_data_len,
+	    &params->tsa_ca_data_len,
+	    &params->tsa_intermediates_data_len,
 	};
-	for (size_t i = 0; i < 4; ++i) {
+	for (size_t i = 0; i < 6; ++i) {
 		if (paths[i]) {
 			buffers[i] = file_read(paths[i], lens[i]);
 			if (!buffers[i]) {
@@ -147,6 +221,8 @@ static bool inputs_read(
 	params->content = buffers[1];
 	params->ca_data = buffers[2];
 	params->intermediates_data = buffers[3];
+	params->tsa_ca_data = buffers[4];
+	params->tsa_intermediates_data = buffers[5];
 	return true;
 }
 
@@ -157,18 +233,13 @@ int main(int argc, char** argv) {
 	}
 
 	libssig_verify_params params = {0};
-	const char*           ca_path = NULL;
-	const char*           intermediates_path = NULL;
-	int                   first = options_parse(
-        argc,
-        argv,
-        &params,
-        &ca_path,
-        &intermediates_path
-    );
+	const char*           cert_paths[4] = {0};
+	int first = options_parse(argc, argv, &params, cert_paths);
 	if (first < 0 || argc < first + 1 || argc > first + 2 ||
-	    (intermediates_path && !ca_path &&
-	     !(params.options & LIBSSIG_VERIFY_SYSTEM_TRUST))) {
+	    (cert_paths[1] && !cert_paths[0] &&
+	     !(params.options & LIBSSIG_VERIFY_SYSTEM_TRUST)) ||
+	    (cert_paths[3] && !cert_paths[2] &&
+	     !(params.options & LIBSSIG_VERIFY_TSA_SYSTEM_TRUST))) {
 		usage_print(argv[0], stderr);
 		return EXIT_FAILURE;
 	}
@@ -176,10 +247,12 @@ int main(int argc, char** argv) {
 	const char* paths[] = {
 	    argv[first],
 	    argc == first + 2 ? argv[first + 1] : NULL,
-	    ca_path,
-	    intermediates_path
+	    cert_paths[0],
+	    cert_paths[1],
+	    cert_paths[2],
+	    cert_paths[3]
 	};
-	unsigned char*        buffers[4] = {0};
+	unsigned char*        buffers[6] = {0};
 	libssig_verify_result result = {0};
 	libssig_status        status = LIBSSIG_ERROR_ARGUMENT;
 	if (inputs_read(paths, buffers, &params)) {
@@ -198,7 +271,7 @@ int main(int argc, char** argv) {
 		}
 	}
 	libssig_verify_free(&result);
-	for (size_t i = 0; i < 4; ++i) {
+	for (size_t i = 0; i < 6; ++i) {
 		free(buffers[i]);
 	}
 	return status == LIBSSIG_OK ? EXIT_SUCCESS : EXIT_FAILURE;

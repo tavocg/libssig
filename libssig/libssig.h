@@ -38,6 +38,8 @@ typedef enum {
 	LIBSSIG_ERROR_VERIFY,
 	LIBSSIG_ERROR_TRUST,
 	LIBSSIG_ERROR_TIMESTAMP,
+	LIBSSIG_ERROR_OCSP,
+	LIBSSIG_ERROR_REVOKED,
 } libssig_status;
 
 /* Inicializar con {0}. No copiar ni modificar impl.
@@ -275,7 +277,114 @@ libssig_status libssig_sign(
 void libssig_signature_free(libssig_signature* signature);
 
 typedef enum {
+	LIBSSIG_OCSP_FAILED,
+	LIBSSIG_OCSP_GOOD,
+	LIBSSIG_OCSP_REVOKED,
+	LIBSSIG_OCSP_UNKNOWN,
+} libssig_ocsp_status;
+
+typedef enum {
+	LIBSSIG_OCSP_SYSTEM_TRUST = 1u << 0,
+	LIBSSIG_OCSP_ALLOW_MISSING_NONCE = 1u << 1,
+} libssig_ocsp_options;
+
+/* Certificado y emisor: un X.509 PEM o DER por buffer; punteros prestados. */
+typedef struct {
+	const unsigned char* cert_data;
+	size_t               cert_data_len;
+	const unsigned char* issuer_data;
+	size_t               issuer_data_len;
+} libssig_ocsp_request_params;
+
+/* Solicitud DER y URLs HTTP(S) del AIA del certificado; memoria propia. */
+typedef struct {
+	unsigned char*      data;
+	size_t              len;
+	libssig_string_list urls;
+} libssig_ocsp_query;
+
+/* Una consulta, CertID SHA-1 por compatibilidad OCSP y nonce aleatorio de
+ * 32 bytes. SHA-1 solo identifica emisor/serial; no firma la solicitud.
+ * Sin HTTP ni confianza implícita en el emisor. Rechaza emisores incorrectos.
+ * Liberar la salida antes de reutilizarla; vacía en error. */
+libssig_status libssig_ocsp_request(
+    const libssig_ocsp_request_params* params,
+    libssig_ocsp_query*                query
+);
+void libssig_ocsp_request_free(libssig_ocsp_query* query);
+
+typedef struct {
+	const unsigned char* cert_data;
+	size_t               cert_data_len;
+	const unsigned char* issuer_data;
+	size_t               issuer_data_len;
+	const unsigned char* request;
+	size_t               request_len;
+	const unsigned char* response;
+	size_t               response_len;
+	const unsigned char* ca_data;
+	size_t               ca_data_len;
+	const unsigned char* intermediates_data;
+	size_t               intermediates_data_len;
+	unsigned int         options;
+	/* Segundos; 0 usa 86400 de antigüedad máxima y 300 de tolerancia. */
+	unsigned long max_age;
+	unsigned long clock_skew;
+} libssig_ocsp_verify_params;
+
+/* Sin memoria dinámica. valid indica respuesta autenticada, vigente y
+ * correspondiente al certificado, incluso si status es REVOKED o UNKNOWN.
+ * error es el retorno de ocsp_verify; response_status es el código RFC 6960
+ * (-1 si no se decodificó), reason es el código CRL (-1 si no aplica).
+ * Fechas UTC ISO 8601, precisión de segundos; vacías si no son aplicables. */
+typedef struct {
+	libssig_ocsp_status status;
+	libssig_status      error;
+	bool                valid;
+	int                 response_status;
+	int                 reason;
+	char                produced_at[21];
+	char                this_update[21];
+	char                next_update[21];
+	char                revocation_time[21];
+} libssig_ocsp_result;
+
+/* Exige ca_data o SYSTEM_TRUST. Valida emisor, CertID, respondedor autorizado,
+ * firma, cadena, nonce y fechas a la hora actual. No consulta red ni CRL.
+ * OK significa respuesta válida: comprobar status para GOOD/REVOKED/UNKNOWN.
+ * Sin respuesta válida queda FAILED. ALLOW_MISSING_NONCE permite únicamente
+ * nonce ausente en la respuesta; nunca acepta nonce distinto.
+ * Entradas hasta INT_MAX bytes. No valida vigencia del certificado consultado
+ * ni revocación recursiva del respondedor. */
+libssig_status libssig_ocsp_verify(
+    const libssig_ocsp_verify_params* params,
+    libssig_ocsp_result*              result
+);
+
+/* Evidencia para un firmante de verify; tsa=true consulta su certificado TSA.
+ * Confianza tomada del grupo correspondiente de verify_params. Solo admite
+ * ALLOW_MISSING_NONCE en options; SYSTEM_TRUST se decide en verify_params.
+ * response=NULL, len=0 representa una consulta sin respuesta utilizable. */
+typedef struct {
+	size_t               signer_index;
+	bool                 tsa;
+	const unsigned char* issuer_data;
+	size_t               issuer_data_len;
+	const unsigned char* request;
+	size_t               request_len;
+	const unsigned char* response;
+	size_t               response_len;
+	unsigned int         options;
+	unsigned long        max_age;
+	unsigned long        clock_skew;
+} libssig_ocsp_evidence;
+
+typedef enum {
 	LIBSSIG_VERIFY_SYSTEM_TRUST = 1u << 0,
+	LIBSSIG_VERIFY_TSA_SYSTEM_TRUST = 1u << 1,
+	LIBSSIG_VERIFY_REQUIRE_TIMESTAMP = 1u << 2,
+	LIBSSIG_VERIFY_REQUIRE_OCSP = 1u << 3,
+	LIBSSIG_VERIFY_REQUIRE_TSA_OCSP = 1u << 4,
 } libssig_verify_options;
 
 /* Punteros prestados durante la llamada; data contiene CMS/CAdES DER.
@@ -296,9 +405,38 @@ typedef struct {
 	size_t               ca_data_len;
 	const unsigned char* intermediates_data;
 
-	size_t       intermediates_data_len;
+	size_t intermediates_data_len;
+	/* Confianza TSA independiente; no hereda las raíces del firmante. */
+	const unsigned char* tsa_ca_data;
+
+	size_t               tsa_ca_data_len;
+	const unsigned char* tsa_intermediates_data;
+
+	size_t                       tsa_intermediates_data_len;
+	const libssig_ocsp_evidence* ocsp;
+
+	size_t       ocsp_count;
 	unsigned int options;
 } libssig_verify_params;
+
+/* Resultado del sello del firmante; valid comprueba firma, ESS, propósito TSA
+ * y vínculo con la firma del documento. La confianza se evalúa por separado.
+ * time contiene UTC ISO 8601 a precisión de segundos, solo si valid = true.
+ * Ausente: present = false, status = ERROR_NOT_FOUND. cert_der pertenece al
+ * resultado y se libera con libssig_verify_free. */
+typedef struct {
+	bool           present;
+	bool           valid;
+	bool           trust_checked;
+	bool           trusted;
+	libssig_status status;
+	long           trust_error;
+	char           time[21];
+	unsigned char* cert_der;
+
+	size_t              cert_der_len;
+	libssig_ocsp_result ocsp;
+} libssig_verify_timestamp;
 
 /* Datos del firmante copiados; propiedad del resultado. */
 typedef struct {
@@ -306,6 +444,8 @@ typedef struct {
 	size_t         cert_der_len;
 	char*          mime_type; /* NULL si no hay atributo MIME firmado. */
 	long trust_error;         /* Código X.509 de OpenSSL; 0 si no hay error. */
+	libssig_verify_timestamp timestamp;
+	libssig_ocsp_result      ocsp;
 } libssig_verify_signer;
 
 typedef struct {
@@ -324,8 +464,21 @@ typedef struct {
  * (incluye SSL_CERT_FILE/SSL_CERT_DIR) a ca_data, si está presente.
  * Intermediarios requieren ca_data o SYSTEM_TRUST.
  * Bundles hasta INT_MAX bytes; vacíos, inválidos o con basura se rechazan.
- * No consulta red, OCSP ni CRL; no certifica cumplimiento completo CAdES.
+ * No usa red ni descarga OCSP/CRL; puede validar evidencia OCSP proporcionada.
+ * No certifica cumplimiento completo CAdES.
+ * Verifica sellos presentes sin requerir la solicitud original.
+ * TSA_SYSTEM_TRUST suma raíces del sistema solo para TSA. REQUIRE_TIMESTAMP
+ * exige un sello válido en cada firmante. tsa_ca_data activa confianza TSA.
+ * El sello se verifica a la hora actual, sin validación histórica.
+ * time es una fecha autenticada solo si la TSA es confiable.
+ * ERROR_TIMESTAMP conserva la firma válida e informa sellos inválidos/ausentes.
  * ERROR_TRUST conserva firma válida, firmantes y errores de confianza.
+ * REQUIRE_OCSP exige GOOD para cada firmante; REQUIRE_TSA_OCSP exige un
+ * sello válido y OCSP GOOD para su TSA. Requieren confianza del grupo indicado.
+ * Evidencia opcional presente también se valida; no se ignoran sus errores.
+ * ERROR_REVOKED conserva firma y estado revocado autenticado; ERROR_OCSP
+ * conserva estados desconocidos, fallidos o ausentes cuando se exigen.
+ * trusted solo describe cadena de certificados, no estado de revocación.
  * Otros errores dejan salida vacía. Liberar antes de reutilizar. */
 libssig_status libssig_verify(
     const libssig_verify_params* params,

@@ -182,3 +182,84 @@ existing timestamps. OpenSSL independently checks the response against its
 request and verifies that the resulting container preserves the document.
 No token, PIN, network, or external TSA is used. See
 [timestamping](../doc/timestamping.md) for the application-side transport example.
+
+## Verifying stored timestamps
+
+No original `.tsq` request or `.tsr` response is needed:
+
+```sh
+./build/tests/verify-file \
+  --require-timestamp \
+  --tsa-ca-file tsa-raices.pem \
+  --tsa-intermediates tsa-intermediarios.pem \
+  documento.p7m
+
+# Use the configured system store for TSA trust.
+./build/tests/verify-file --tsa-system-trust --require-timestamp documento.p7m
+```
+
+Document trust (`--ca-file`, `--intermediates`, `--system-trust`) and TSA trust
+are independent. Omit `--require-timestamp` to accept unsigned-by-TSA documents;
+present stamps are still checked. The command shows the document signature,
+timestamp validity, timestamp UTC time, and TSA chain result separately.
+
+The `timestamp` test now also verifies persisted tokens, including all nine
+original algorithm/hash combinations, attached/detached documents, transplanted
+or tampered tokens, malformed/duplicate attributes, missing stamps, expired TSA
+certificates, and multiple signers with mixed timestamp presence. CLI checks use
+only saved containers and separate document/TSA authorities.
+
+## OCSP without network access
+
+```sh
+./build/tests/ocsp-file request cert.pem issuer.pem request.der
+./build/tests/ocsp-file verify \
+  cert.pem issuer.pem request.der response.der roots.pem intermediates.pem
+```
+
+`request` prints HTTP(S) URLs from AIA and creates a new DER request without
+replacing existing files. The application sends it and supplies the returned
+DER response. `verify` distinguishes not revoked, revoked, unknown and failure;
+only not revoked returns exit status zero. Replace `roots.pem` with
+`--system-trust` to use the configured default OpenSSL store. A final
+`--allow-missing-nonce` explicitly permits responders that omit the nonce,
+without allowing mismatches or stale responses.
+
+`ocsp` and `ocsp_cli` use local issuers and delegated responders. Tests include
+wrong trust/authorization/signatures, nonce and freshness failures, duplicate
+status records, all certificate states, saved requests, no-overwrite behavior,
+and independent OpenSSL checks. `timestamp` also exercises TSA OCSP evidence.
+See [OCSP](../doc/ocsp.md) for API semantics and evidence in `libssig_verify`.
+
+### TSA real de Costa Rica (opcional)
+
+`tsa_sinpe` envía una sola solicitud RFC 3161 a TSA-SINPE y comprueba
+nonce, huella, firma, propósito TSA y cadena de confianza. Después incorpora
+el sello en un CAdES y verifica el contenedor persistido. Usa una firma
+sintética: no requiere tarjeta ni PIN. No consulta revocación.
+
+Obtén las raíces de confianza oficiales de la jerarquía TSA del BCCR y,
+si la respuesta no los incluye, sus certificados intermediarios. No uses
+como raíz confiable un certificado obtenido únicamente de la respuesta TSA.
+
+```sh
+cmake -S . -B build \
+  -DLIBSSIG_TEST_TSA_SINPE=ON \
+  -DLIBSSIG_TSA_SINPE_CA_FILE=/ruta/raices-tsa.pem \
+  -DLIBSSIG_TSA_SINPE_INTERMEDIATES_FILE=/ruta/intermediarios-tsa.pem
+cmake --build build -j
+ctest --test-dir build -R '^tsa_sinpe$' --output-on-failure -V
+```
+
+El intermediario es opcional: omite esa opción si no hace falta.
+La URL predeterminada es `http://tsa.sinpe.fi.cr/tsaHttp/`, indicada en la
+[guía del BCCR](https://www.bccr.fi.cr/firma-digital/DocFirmaDigital/guiaxolidos.pdf).
+Puede cambiarse con `LIBSSIG_TSA_SINPE_URL` si el servicio publica otra URL.
+La prueba depende de la red, disponibilidad y políticas del servicio real;
+no se habilita de forma predeterminada. Al habilitarla, también participa en
+`ctest` sin filtros. Para deshabilitarla: `-DLIBSSIG_TEST_TSA_SINPE=OFF`.
+Cada ejecución conserva TSQ, TSR y CAdES en un subdirectorio nuevo de
+`build/tests/tsa-sinpe-fixtures/`, incluso si la validación falla.
+
+El auxiliar `timestamp-file` también permite generar solicitudes y aplicar
+respuestas manualmente; ejecutarlo sin argumentos muestra su uso.

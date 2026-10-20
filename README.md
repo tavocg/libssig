@@ -22,6 +22,9 @@ A small C library for digital signing using PKCS#11 through `p11-kit`.
 - `libssig_verify_free`
 - `libssig_timestamp_request`
 - `libssig_timestamp`
+- `libssig_ocsp_request`
+- `libssig_ocsp_request_free`
+- `libssig_ocsp_verify`
 
 Get the loaded library version (each output pointer may be `NULL`):
 
@@ -64,8 +67,14 @@ certificate chains. Additional intermediates can be supplied separately.
 See [the verification API](doc/verification.md).
 
 RFC 3161 timestamping generates a request and incorporates a validated TSA
-response into an existing CAdES signature. The application handles transport.
+response into an existing CAdES signature. Verification also checks stored
+signature timestamps, with independently configured TSA trust. The application
+handles transport.
 See [timestamping](doc/timestamping.md).
+
+OCSP APIs extract responder URLs, generate requests and validate responses.
+Verification accepts separate OCSP evidence for document and TSA certificates.
+See [OCSP](doc/ocsp.md).
 
 ## Build
 
