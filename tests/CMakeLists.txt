@@ -74,7 +74,7 @@ target_link_libraries(certificate_metadata_test PRIVATE libssig::ssig PkgConfig:
 target_compile_options(certificate_metadata_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME certificate_metadata COMMAND certificate_metadata_test)
 
-# Manual detached CMS signing using a real token.
+# Manual CMS/CAdES signing using a real token.
 add_executable(token_sign_file token_sign.c)
 target_compile_definitions(token_sign_file PRIVATE LIBSSIG_CMS_FILE=1)
 target_link_libraries(token_sign_file PRIVATE libssig::ssig PkgConfig::P11_KIT OpenSSL::Crypto)
@@ -105,3 +105,13 @@ add_test(NAME mime_missing_database COMMAND mime_test --missing-db)
 add_test(NAME sign_mime_override COMMAND sign_test --mime-override-only)
 set_tests_properties(mime_missing_database sign_mime_override PROPERTIES
     ENVIRONMENT "MAGIC=${CMAKE_CURRENT_BINARY_DIR}/missing-magic-database")
+
+add_executable(verify_file verify_file.c)
+target_link_libraries(verify_file PRIVATE libssig::ssig)
+target_compile_options(verify_file PRIVATE -Wall -Wextra -Wpedantic -Werror)
+set_target_properties(verify_file PROPERTIES OUTPUT_NAME verify-file)
+
+add_executable(verify_test verify_test.c)
+target_link_libraries(verify_test PRIVATE libssig::ssig OpenSSL::Crypto)
+target_compile_options(verify_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME verify COMMAND verify_test)

@@ -642,7 +642,46 @@ static int cades_certificate_hash_corrupt(
 	 * ESS hash. */
 	CHECK(cms_verify(&output, params->data, params->data_len) == 0);
 	CHECK(fixture_write("cades-bad-cert.p7s", der, (size_t)len) == 0);
+	libssig_verify_params request = {
+	    .data = der,
+	    .data_len = (size_t)len,
+	    .content = params->data,
+	    .content_len = params->data_len,
+	};
+	libssig_verify_result result = {0};
+	CHECK(libssig_verify(&request, &result) == LIBSSIG_ERROR_VERIFY);
+	CHECK(!result.signature_valid && !result.signers);
+	libssig_verify_free(&result);
 	OPENSSL_free(der);
+	return 0;
+}
+
+static int verify_roundtrip(
+    const libssig_signature*   signature,
+    const libssig_sign_params* params,
+    bool                       attached
+) {
+	const unsigned char   empty = 0;
+	libssig_verify_params request = {
+	    .data = signature->data,
+	    .data_len = signature->len,
+	    .content = attached ? NULL : (params->data ? params->data : &empty),
+	    .content_len = attached ? 0 : params->data_len,
+	};
+	libssig_verify_result result = {0};
+	CHECK(libssig_verify(&request, &result) == LIBSSIG_OK);
+	CHECK(result.signature_valid && result.detached == !attached);
+	CHECK(result.count == 1 && !result.trust_checked && !result.trusted);
+	CHECK(result.signers[0].cert_der_len == params->cert->der_len);
+	CHECK(!memcmp(
+	    result.signers[0].cert_der,
+	    params->cert->der,
+	    params->cert->der_len
+	));
+	if (params->format == LIBSSIG_FORMAT_CADES) {
+		CHECK(result.signers[0].mime_type);
+	}
+	libssig_verify_free(&result);
 	return 0;
 }
 
@@ -665,7 +704,33 @@ static libssig_status public_sign(
 	    .format = format,
 	    .mime_type = params->mime_type,
 	};
-	return libssig_sign(ctx, &request, output);
+	libssig_signature invalid = {0};
+	request.options = 0x80000000u;
+	CHECK(libssig_sign(ctx, &request, &invalid) == LIBSSIG_ERROR_ARGUMENT);
+	CHECK(!invalid.data && !invalid.len);
+	request.options = LIBSSIG_SIGN_DETACHED;
+	libssig_status status = libssig_sign(ctx, &request, output);
+	if (status != LIBSSIG_OK) {
+		return status;
+	}
+
+	CHECK(verify_roundtrip(output, &request, false) == 0);
+	request.options = 0;
+	libssig_signature attached = {0};
+	CHECK(libssig_sign(ctx, &request, &attached) == LIBSSIG_OK);
+	CHECK(verify_roundtrip(&attached, &request, true) == 0);
+	char name[80];
+	snprintf(
+	    name,
+	    sizeof(name),
+	    "attached-%s-%d-%d.p7m",
+	    format == LIBSSIG_FORMAT_CADES ? "cades" : "cms",
+	    (int)params->algo,
+	    (int)params->hash
+	);
+	CHECK(fixture_write(name, attached.data, attached.len) == 0);
+	libssig_signature_free(&attached);
+	return LIBSSIG_OK;
 }
 
 static int public_algorithms_invalid_check(
@@ -1067,6 +1132,7 @@ int main(int argc, char** argv) {
 	        .pin_len = 4,
 	        .data = data,
 	        .data_len = sizeof(data),
+	        .options = LIBSSIG_SIGN_DETACHED,
     };
 	libssig_signature signature = {0};
 	CHECK(libssig_session_sign(&ctx, &params, &signature) == LIBSSIG_OK);

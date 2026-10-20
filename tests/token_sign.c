@@ -36,8 +36,8 @@ static void usage_print(const char* program) {
 #ifdef LIBSSIG_CMS_FILE
 	fprintf(
 	    stderr,
-	    "Uso: %s URI ID_HEX INPUT OUTPUT.p7s [rsa-pkcs|rsa-pss|ecdsa] "
-	    "[sha256|sha384|sha512]\n",
+	    "Uso: %s URI ID_HEX INPUT OUTPUT.p7m [rsa-pkcs|rsa-pss|ecdsa] "
+	    "[sha256|sha384|sha512] [--detached]\n",
 	    program
 	);
 #else
@@ -45,6 +45,12 @@ static void usage_print(const char* program) {
 	    stderr,
 	    "Uso: %s URI ID_HEX [rsa-pkcs|rsa-pss|ecdsa] [sha256|sha384|sha512]\n",
 	    program
+	);
+#endif
+#ifdef LIBSSIG_CMS_FILE
+	fputs(
+	    "Contenido incluido por defecto; --detached genera firma separada.\n",
+	    stderr
 	);
 #endif
 	fputs("Por defecto: rsa-pkcs y sha256. ID_HEX sin separadores.\n", stderr);
@@ -94,6 +100,10 @@ static bool options_parse(
 	const char* algorithms[] = {"rsa-pkcs", "rsa-pss", "ecdsa"};
 	const char* hashes[] = {"sha256", "sha384", "sha512"};
 #ifdef LIBSSIG_CMS_FILE
+	if (argc > 1 && !strcmp(argv[argc - 1], "--detached")) {
+		params->options = LIBSSIG_SIGN_DETACHED;
+		--argc;
+	}
 	const int first = 5;
 #else
 	const int first = 3;
@@ -382,6 +392,7 @@ static libssig_status public_file_sign(
 	    .algo = params->algo,
 	    .hash = params->hash,
 	    .format = LIBSSIG_FORMAT_CADES,
+	    .options = params->options,
 	    .mime_type = params->mime_type,
 	};
 	return libssig_sign(ctx, &request, signature);
@@ -421,7 +432,7 @@ static bool sign_and_verify(
 	if (verified) {
 		printf(
 		    output_path
-		        ? "CAdES B-B detached verificado y guardado (%zu bytes).\n"
+		        ? "CAdES B-B verificado y guardado (%zu bytes).\n"
 		        : "Firma de prueba verificada correctamente (%zu bytes).\n",
 		    signature.len
 		);

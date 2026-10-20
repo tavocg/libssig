@@ -18,6 +18,8 @@ A small C library for digital signing using PKCS#11 through `p11-kit`.
 - `libssig_certificates_free`
 - `libssig_sign`
 - `libssig_signature_free`
+- `libssig_verify`
+- `libssig_verify_free`
 
 Get the loaded library version (each output pointer may be `NULL`):
 
@@ -49,9 +51,14 @@ Results include Key Usage, numeric EKU OIDs and certificate policy OIDs. This is
 metadata extraction, not trust validation or a check of the private key's
 `CKA_SIGN` capability. All metadata is freed by `libssig_certificates_free()`.
 
-`libssig_sign()` returns detached CMS or CAdES B-B signatures in memory.
+`libssig_sign()` returns CMS or CAdES B-B signatures in memory, with embedded
+content by default. Use `LIBSSIG_SIGN_DETACHED` for a separate signature.
 Its zero-initialized defaults are CAdES, RSA PKCS#1 v1.5 and SHA-256.
 See [the signing API example](doc/signing.md) for parameters and ownership.
+
+`libssig_verify()` checks CMS/CAdES signatures without a token. Optional
+`LIBSSIG_VERIFY_SYSTEM_TRUST` also requires trusted certificate chains.
+See [the verification API](doc/verification.md).
 
 ## Build
 

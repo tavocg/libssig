@@ -48,6 +48,10 @@ static libssig_status params_check(
 		return LIBSSIG_ERROR_UNSUPPORTED;
 	}
 
+	if (params->options & ~LIBSSIG_SIGN_DETACHED) {
+		return LIBSSIG_ERROR_ARGUMENT;
+	}
+
 	if (params->format == LIBSSIG_FORMAT_CADES &&
 	    !mime_type_valid(params->mime_type)) {
 		return LIBSSIG_ERROR_ARGUMENT;
@@ -81,6 +85,7 @@ libssig_status libssig_sign(
 	    .algo = params->algo,
 	    .hash = params->hash,
 	    .mime_type = params->mime_type,
+	    .options = params->options,
 	};
 	return params->format == LIBSSIG_FORMAT_CADES
 	           ? libssig_cades_sign(ctx, &signing, params->cert, signature)

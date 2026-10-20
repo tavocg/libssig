@@ -54,6 +54,7 @@ typedef struct {
 	size_t               data_len;
 	libssig_algo         algo;
 	libssig_hash         hash;
+	unsigned int         options;
 	const char*          mime_type; /* CAdES: NULL detecta MIME con libmagic. */
 } libssig_key_sign_params;
 
@@ -82,7 +83,7 @@ libssig_status libssig_session_sign(
 libssig_status libssig_certificate_metadata_read(libssig_certificate* cert);
 void           libssig_certificate_metadata_clear(libssig_certificate* cert);
 
-/* CMS SignedData DER detached, con certificado, sin atributos firmados.
+/* CMS SignedData DER, con certificado, sin atributos firmados.
  * No es CAdES. Firma los bytes originales (máximo INT_MAX) y comprueba
  * correspondencia criptográfica, no confianza/vigencia/revocación.
  * El ID del certificado debe coincidir con params->id.
@@ -94,7 +95,7 @@ libssig_status libssig_cms_sign(
     libssig_signature*             output
 );
 
-/* CAdES B-B DER detached: atributos firmados y signingCertificateV2.
+/* CAdES B-B DER: atributos firmados y signingCertificateV2.
  * Mismas reglas de propiedad y límites que libssig_cms_sign.
  * signingTime es hora declarada local, no un sello de tiempo de una TSA. */
 libssig_status libssig_cades_sign(

@@ -33,6 +33,10 @@ typedef enum {
 	LIBSSIG_ERROR_UNSUPPORTED,
 	LIBSSIG_ERROR_CRYPTO,
 	LIBSSIG_ERROR_MAGIC,
+	LIBSSIG_ERROR_FORMAT,
+	LIBSSIG_ERROR_CONTENT_REQUIRED,
+	LIBSSIG_ERROR_VERIFY,
+	LIBSSIG_ERROR_TRUST,
 } libssig_status;
 
 /* Inicializar con {0}. No copiar ni modificar impl.
@@ -212,8 +216,12 @@ typedef enum {
 	LIBSSIG_FORMAT_CMS,
 } libssig_format;
 
+typedef enum {
+	LIBSSIG_SIGN_DETACHED = 1u << 0,
+} libssig_sign_options;
+
 /* Todos los punteros son prestados y solo se usan durante la llamada.
- * Inicializar con {0}: RSA PKCS#1 v1.5, SHA-256 y CAdES B-B detached. */
+ * Inicializar con {0}: RSA PKCS#1 v1.5, SHA-256 y CAdES B-B attached. */
 typedef struct {
 	const libssig_token*       token;
 	const libssig_certificate* cert;
@@ -226,6 +234,7 @@ typedef struct {
 	libssig_algo         algo;
 	libssig_hash         hash;
 	libssig_format       format;
+	unsigned int         options;
 	const char*
 	    mime_type; /* CAdES: NULL detecta el tipo del contenido con libmagic. */
 } libssig_sign_params;
@@ -244,7 +253,9 @@ typedef struct {
  * Datos hasta INT_MAX bytes; NULL, 0 permite firmar contenido vacío.
  * PIN NULL, 0 solicita la ruta protegida cuando es necesaria. Un PIN vacío
  * explícito usa un puntero no NULL con pin_len = 0.
- * Devuelve CMS/CAdES DER detached con el certificado incorporado, y comprueba
+ * options = 0 incorpora el contenido; SIGN_DETACHED genera firma separada.
+ * Bits desconocidos devuelven ERROR_ARGUMENT.
+ * Devuelve CMS/CAdES DER con el certificado incorporado, y comprueba
  * la firma con su clave pública. No valida confianza, vigencia ni revocación.
  * No lee/escribe documentos ni usa red; libmagic lee su base local si hace
  * falta detectar MIME. Un fallo de detección devuelve LIBSSIG_ERROR_MAGIC.
@@ -261,6 +272,52 @@ libssig_status libssig_sign(
 
 /* Acepta NULL y resultados vacíos; deja data = NULL, len = ck_rv = 0. */
 void libssig_signature_free(libssig_signature* signature);
+
+typedef enum {
+	LIBSSIG_VERIFY_SYSTEM_TRUST = 1u << 0,
+} libssig_verify_options;
+
+/* Punteros prestados durante la llamada; data contiene CMS/CAdES DER.
+ * content = NULL, content_len = 0 indica contenido externo ausente.
+ * Para contenido externo vacío, usar un puntero no NULL y len = 0.
+ * Un contenedor attached rechaza content no NULL para evitar ambigüedad. */
+typedef struct {
+	const unsigned char* data;
+	size_t               data_len;
+	const unsigned char* content;
+	size_t               content_len;
+	unsigned int         options;
+} libssig_verify_params;
+
+/* Datos del firmante copiados; propiedad del resultado. */
+typedef struct {
+	unsigned char* cert_der;
+	size_t         cert_der_len;
+	char*          mime_type; /* NULL si no hay atributo MIME firmado. */
+	long trust_error;         /* Código X.509 de OpenSSL; 0 si no hay error. */
+} libssig_verify_signer;
+
+typedef struct {
+	libssig_verify_signer* signers;
+	size_t                 count;
+	bool                   detached;
+	bool                   signature_valid;
+	bool                   trust_checked;
+	bool                   trusted;
+} libssig_verify_result;
+
+/* Sin contexto PKCS#11, token ni PIN. Verifica todos los firmantes.
+ * 0 verifica firma, contenido y vínculos ESS presentes (incluido V2).
+ * SYSTEM_TRUST exige además cadenas vigentes hasta el almacén predeterminado
+ * de OpenSSL (incluye su configuración SSL_CERT_FILE/SSL_CERT_DIR).
+ * No consulta red, OCSP ni CRL; no certifica cumplimiento completo CAdES.
+ * ERROR_TRUST conserva firma válida, firmantes y errores de confianza.
+ * Otros errores dejan salida vacía. Liberar antes de reutilizar. */
+libssig_status libssig_verify(
+    const libssig_verify_params* params,
+    libssig_verify_result*       result
+);
+void libssig_verify_free(libssig_verify_result* result);
 
 #ifdef __cplusplus
 }

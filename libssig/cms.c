@@ -178,6 +178,32 @@ static CMS_ContentInfo* container_create(
 	return cms;
 }
 
+static bool content_set(
+    CMS_ContentInfo*               cms,
+    const libssig_key_sign_params* params
+) {
+	if (params->options & LIBSSIG_SIGN_DETACHED) {
+		return true;
+	}
+
+	const unsigned char empty = 0;
+	ASN1_OCTET_STRING*  content = ASN1_OCTET_STRING_new();
+	if (!content || !ASN1_OCTET_STRING_set(
+	                    content,
+	                    params->data ? params->data : &empty,
+	                    (int)params->data_len
+	                )) {
+		ASN1_OCTET_STRING_free(content);
+		return false;
+	}
+
+	/* A completed string avoids the pending-content flag used by CMS_final. */
+	ASN1_OCTET_STRING** slot = CMS_get0_content(cms);
+	ASN1_OCTET_STRING_free(*slot);
+	*slot = content;
+	return true;
+}
+
 static bool container_verify(
     CMS_ContentInfo*               cms,
     const libssig_key_sign_params* params
@@ -191,7 +217,7 @@ static bool container_verify(
 	              cms,
 	              NULL,
 	              NULL,
-	              input,
+	              (params->options & LIBSSIG_SIGN_DETACHED) ? input : NULL,
 	              output,
 	              CMS_BINARY | CMS_NO_SIGNER_CERT_VERIFY
 	          ) == 1;
@@ -259,7 +285,7 @@ static libssig_status container_sign(
 	OPENSSL_free(attributes);
 	if (status == LIBSSIG_OK) {
 		bool ok = signature_set(signer, params->algo, &raw) &&
-		          container_verify(cms, params);
+		          content_set(cms, params) && container_verify(cms, params);
 		status = ok ? container_encode(cms, output) : LIBSSIG_ERROR_CRYPTO;
 	}
 	output->ck_rv = raw.ck_rv;
@@ -267,7 +293,7 @@ static libssig_status container_sign(
 	return status;
 }
 
-static libssig_status detached_sign(
+static libssig_status container_sign_with_certificate(
     const libssig_context*         ctx,
     const libssig_key_sign_params* params,
     const libssig_certificate*     cert,
@@ -303,7 +329,7 @@ libssig_status libssig_cms_sign(
     const libssig_certificate*     cert,
     libssig_signature*             output
 ) {
-	return detached_sign(ctx, params, cert, false, output);
+	return container_sign_with_certificate(ctx, params, cert, false, output);
 }
 
 libssig_status libssig_cades_sign(
@@ -322,7 +348,7 @@ libssig_status libssig_cades_sign(
 	}
 
 	if (params->mime_type) {
-		return detached_sign(ctx, params, cert, true, output);
+		return container_sign_with_certificate(ctx, params, cert, true, output);
 	}
 
 	char*          mime_type = NULL;
@@ -337,7 +363,7 @@ libssig_status libssig_cades_sign(
 
 	libssig_key_sign_params signing = *params;
 	signing.mime_type = mime_type;
-	status = detached_sign(ctx, &signing, cert, true, output);
+	status = container_sign_with_certificate(ctx, &signing, cert, true, output);
 	free(mime_type);
 	return status;
 }

@@ -27,7 +27,7 @@ libssig_sign_params params = {
 libssig_signature signature = {0};
 libssig_status status = libssig_sign(&ctx, &params, &signature);
 if (status == LIBSSIG_OK) {
-    /* signature.data contains signature.len bytes of detached DER.
+    /* signature.data contains signature.len bytes of DER with embedded content.
      * The application may write these bytes to a .p7s file. */
 } else {
     /* Inspect status first; signature.ck_rv holds a PKCS#11 error when present. */
@@ -44,6 +44,7 @@ content still need to be supplied. Empty content is represented by `NULL, 0`.
 | `algo` | `LIBSSIG_ALGO_RSA_PKCS`, `LIBSSIG_ALGO_RSA_PSS`, `LIBSSIG_ALGO_ECDSA` |
 | `hash` | `LIBSSIG_HASH_SHA256`, `LIBSSIG_HASH_SHA384`, `LIBSSIG_HASH_SHA512` |
 | `format` | `LIBSSIG_FORMAT_CADES` (B-B), `LIBSSIG_FORMAT_CMS` (without signed attributes) |
+| `options` | `0` embeds the original content; `LIBSSIG_SIGN_DETACHED` keeps it separate |
 | `mime_type` | Optional CAdES MIME type; NULL detects it from content with libmagic; ignored for CMS |
 
 RSA-PSS uses MGF1 with the selected hash and a salt as long as the digest.
@@ -78,4 +79,7 @@ This API accepts content up to `INT_MAX` bytes. It checks correspondence between
 the generated signature and the selected certificate, but does not validate
 certificate trust, validity periods, revocation, or application-specific usage
 policies. CAdES includes a locally claimed signing time, not a TSA timestamp.
-The signature is detached: retain the exact original file for verification.
+The signature includes the original content by default. Set
+`params.options = LIBSSIG_SIGN_DETACHED` for a separate signature; retain the
+exact original file for verification. Unknown option bits are rejected.
+See [verification](verification.md) to check either form.

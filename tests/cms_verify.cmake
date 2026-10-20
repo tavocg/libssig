@@ -73,3 +73,23 @@ execute_process(COMMAND "${OPENSSL}" cms -verify -cades -binary -inform DER
 if(result EQUAL 0)
     message(FATAL_ERROR "OpenSSL accepted an incorrect ESS certificate hash")
 endif()
+
+# Attached containers generated through the public API need no external content.
+foreach(format cms cades)
+    foreach(algo RANGE 0 2)
+        foreach(hash RANGE 0 2)
+            set(signature "${FIXTURES}/attached-${format}-${algo}-${hash}.p7m")
+            execute_process(COMMAND "${OPENSSL}" cms -verify -binary -inform DER
+                -in "${signature}" -noverify -out "${FIXTURES}/attached-verified.bin"
+                RESULT_VARIABLE result ERROR_VARIABLE error)
+            if(NOT result EQUAL 0)
+                message(FATAL_ERROR "OpenSSL rejected attached ${signature}: ${error}")
+            endif()
+            file(SHA256 "${FIXTURES}/input.bin" input_hash)
+            file(SHA256 "${FIXTURES}/attached-verified.bin" output_hash)
+            if(NOT input_hash STREQUAL output_hash)
+                message(FATAL_ERROR "Attached content differs from the original")
+            endif()
+        endforeach()
+    endforeach()
+endforeach()

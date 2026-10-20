@@ -54,17 +54,17 @@ Check authentication alone:
 ./build/tests/login-token 'pkcs11:token=...;serial=...'
 ```
 
-# Detached CAdES B-B file signing
+# CAdES B-B file signing
 
 Sign a file using the same token, ID, algorithm and hash choices:
 
 ```sh
-./build/tests/sign-file 'pkcs11:token=...;serial=...' 01 input.pdf output.p7s
-./build/tests/sign-file 'pkcs11:token=...;serial=...' 01 input.pdf output.p7s rsa-pss sha384
+./build/tests/sign-file 'pkcs11:token=...;serial=...' 01 input.pdf output.p7m
+./build/tests/sign-file 'pkcs11:token=...;serial=...' 01 input.pdf output.p7m rsa-pss sha384
 ```
 
 The output is binary DER CAdES B-B (CMS SignedData) with the signing certificate embedded;
-the original file stays separate. Existing output files are never overwritten.
+the original content is included by default. Existing output files are never overwritten.
 The tool verifies the signature before creating the output. It reads files into
 memory and accepts inputs up to `INT_MAX` bytes. It uses the public
 `libssig_sign()` API and requires an interactive token when authentication is needed.
@@ -72,18 +72,18 @@ memory and accepts inputs up to `INT_MAX` bytes. It uses the public
 Verify independently:
 
 ```sh
-openssl cms -verify -binary -inform DER -in output.p7s \
-  -content input.pdf -noverify -out verified.pdf
+openssl cms -verify -binary -inform DER -in output.p7m \
+  -noverify -out verified.pdf
 ```
 
 `-noverify` skips certificate trust validation; the content signature and signed
-attributes are still checked. Changing the input must make verification fail.
+attributes are still checked. For detached signatures, changing the external input must make verification fail.
 For an independent ESS certificate-binding check, use OpenSSL's CAdES mode with
 your trusted CA certificates and any intermediates:
 
 ```sh
-openssl cms -verify -cades -binary -inform DER -in output.p7s \
-  -content input.pdf -CAfile trusted-ca.pem -certfile intermediate-ca.pem \
+openssl cms -verify -cades -binary -inform DER -in output.p7m \
+  -CAfile trusted-ca.pem -certfile intermediate-ca.pem \
   -out verified.pdf
 ```
 
@@ -102,3 +102,37 @@ binding; it is not a complete ETSI baseline-profile validator. The implementatio
 follows the mandatory B-B attributes and MIME recommendation in
 [ETSI EN 319 122-1 V1.3.1](https://www.etsi.org/deliver/etsi_en/319100_319199/31912201/01.03.01_60/en_31912201v010301p.pdf),
 clauses 5 and 6.3. The basic CMS function remains available internally.
+
+## Attached signing and verification
+
+`sign-file` includes the original content by default. Add `--detached` as the
+last argument to generate a separate signature:
+
+```sh
+./build/tests/sign-file \
+  'pkcs11:model=PKCS%2315%20emulated;manufacturer=NXP;serial=d3b89a00f4675e4e;token=Bit4id%20JCOP3' \
+  4c6c61766544654669726d61 \
+  prueba-mime.txt prueba-attached.p7m
+
+./build/tests/sign-file \
+  'pkcs11:model=PKCS%2315%20emulated;manufacturer=NXP;serial=d3b89a00f4675e4e;token=Bit4id%20JCOP3' \
+  4c6c61766544654669726d61 \
+  prueba-mime.txt prueba-mime.p7s --detached
+
+./build/tests/verify-file prueba-attached.p7m
+./build/tests/verify-file prueba-mime.p7s prueba-mime.txt
+./build/tests/verify-file --system-trust prueba-mime.p7s prueba-mime.txt
+```
+
+Algorithm/hash arguments, if provided, precede `--detached`. The output path
+must not exist. Verification requires no token or PIN. Without `--system-trust`,
+a successful check establishes signature/content integrity only. With that flag,
+all signers must also chain to OpenSSL's configured default trust store; a trust
+failure preserves the cryptographic result and reports numeric X.509 errors.
+No OCSP/CRL or network access is performed. See [verification](../doc/verification.md).
+
+Automated coverage includes all nine algorithm/hash combinations in CMS/CAdES,
+attached and detached, independent OpenSSL verification, altered content and
+signatures, incorrect ESS certificate hashes, missing content/certificates,
+truncated/trailing input, empty content, multiple signers, untrusted signers,
+and a controlled default trust store containing a valid or expired signer.
