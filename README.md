@@ -34,6 +34,26 @@ libssig_tokens(&ctx, &tokens, 0);                  /* Hardware only. */
 libssig_tokens(&ctx, &tokens, LIBSSIG_TOKENS_ALL); /* All present tokens. */
 ```
 
+## Internal signing milestone
+
+The internal API in `libssig/internal.h` now supports RSA PKCS#1 v1.5 with
+SHA-256. `libssig_rsa_sha256_sign()` reuses an open context, opens a session,
+authenticates, and selects a unique private key by the certificate's binary
+`CKA_ID`. It requires an RSA key with `CKA_SIGN` and the provider mechanism
+`CKM_SHA256_RSA_PKCS`. Keys requiring per-operation authentication are supported.
+The input is the original data, not a precomputed digest.
+
+The result is a raw RSA signature owned by `libssig_signature` and released with
+`libssig_signature_free()`. Sessions are closed on success and failure, and
+failed operations return an empty signature with the PKCS#11 error when present.
+These functions are internal; a public `libssig_sign()` and CMS/CAdES packaging
+remain to be implemented. Matching IDs alone do not prove that a certificate
+contains the corresponding public key.
+
+The signing test uses a simulated PKCS#11 module backed by an OpenSSL RSA key
+and verifies the signature with the public key extracted from an X.509 test
+certificate. Hardware integration has not been exercised by that test.
+
 ## Build
 
 Requires CMake 3.16 or newer, a C99 compiler, `pkg-config`, and the development
