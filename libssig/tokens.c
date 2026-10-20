@@ -404,11 +404,11 @@ libssig_status libssig_tokens(
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
 
-	if (options & ~(unsigned int)LIBSSIG_TOKENS_HARDWARE_ONLY) {
+	if (options & ~(unsigned int)LIBSSIG_TOKENS_ALL) {
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
 
-	bool hardware_only = (options & LIBSSIG_TOKENS_HARDWARE_ONLY) != 0;
+	bool           hardware_only = (options & LIBSSIG_TOKENS_ALL) == 0;
 	libssig_status status = LIBSSIG_OK;
 
 	libssig_token_list collected = {0};

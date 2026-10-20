@@ -27,6 +27,13 @@ libssig_version(&major, &minor, &patch);
 Token hardware and firmware versions use `libssig_token_version`, which has
 `major` and `minor` components.
 
+Token queries default to hardware slots when options is `0`:
+
+```c
+libssig_tokens(&ctx, &tokens, 0);                  /* Hardware only. */
+libssig_tokens(&ctx, &tokens, LIBSSIG_TOKENS_ALL); /* All present tokens. */
+```
+
 ## Build
 
 Requires CMake 3.16 or newer, a C99 compiler, `pkg-config`, and the development

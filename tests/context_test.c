@@ -160,18 +160,12 @@ int main(void) {
 	CHECK(slot_info_count == 0);
 
 	slot_flags = 0;
-	CHECK(
-	    libssig_tokens(&ctx, &tokens, LIBSSIG_TOKENS_HARDWARE_ONLY) ==
-	    LIBSSIG_OK
-	);
+	CHECK(libssig_tokens(&ctx, &tokens, 0) == LIBSSIG_OK);
 	CHECK(!tokens.items && !tokens.count && slot_info_count == 1);
 	libssig_tokens_free(&tokens);
 
 	slot_flags = CKF_HW_SLOT;
-	CHECK(
-	    libssig_tokens(&ctx, &tokens, LIBSSIG_TOKENS_HARDWARE_ONLY) ==
-	    LIBSSIG_OK
-	);
+	CHECK(libssig_tokens(&ctx, &tokens, 0) == LIBSSIG_OK);
 	CHECK(tokens.count == 1 && slot_info_count == 2);
 	libssig_tokens_free(&tokens);
 	CHECK(load_count == 2 && release_count == 0);
