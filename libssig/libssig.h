@@ -30,6 +30,7 @@ typedef enum {
 	LIBSSIG_ERROR_URI,
 	LIBSSIG_ERROR_NOT_FOUND,
 	LIBSSIG_ERROR_AMBIGUOUS,
+	LIBSSIG_ERROR_UNSUPPORTED,
 } libssig_status;
 
 /* Inicializar con {0}. No copiar ni modificar impl.
