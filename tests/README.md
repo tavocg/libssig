@@ -66,8 +66,8 @@ Sign a file using the same token, ID, algorithm and hash choices:
 The output is binary DER CAdES B-B (CMS SignedData) with the signing certificate embedded;
 the original file stays separate. Existing output files are never overwritten.
 The tool verifies the signature before creating the output. It reads files into
-memory and accepts inputs up to `INT_MAX` bytes. Like `sign-token`, it uses the
-internal API and requires an interactive token when authentication is needed.
+memory and accepts inputs up to `INT_MAX` bytes. It uses the public
+`libssig_sign()` API and requires an interactive token when authentication is needed.
 
 Verify independently:
 
@@ -89,8 +89,9 @@ openssl cms -verify -cades -binary -inform DER -in output.p7s \
 
 CAdES output includes `contentType`, `messageDigest`, `signingTime`,
 `signingCertificateV2`, and the MIME type. The internal caller can set
-`params.mime_type`; the manual tool uses `application/octet-stream` rather than
-guessing from a filename. The certificate hash omits issuer/serial in its ESS
+`params.mime_type`; when omitted, the library and manual tool detect it from
+the content using libmagic. The magic database must be installed. An explicit
+MIME value bypasses detection. The certificate hash omits issuer/serial in its ESS
 identifier. The token signs canonical DER signed attributes; the document bytes
 are bound through `messageDigest`.
 

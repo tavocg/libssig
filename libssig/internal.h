@@ -54,7 +54,7 @@ typedef struct {
 	size_t               data_len;
 	libssig_algo         algo;
 	libssig_hash         hash;
-	const char* mime_type; /* CAdES: NULL usa application/octet-stream. */
+	const char*          mime_type; /* CAdES: NULL detecta MIME con libmagic. */
 } libssig_key_sign_params;
 
 /* Handle válido únicamente mientras s permanezca abierta. */
@@ -102,6 +102,13 @@ libssig_status libssig_cades_sign(
     const libssig_key_sign_params* params,
     const libssig_certificate*     cert,
     libssig_signature*             output
+);
+
+/* MIME a partir del contenido; el consumidor libera out_type con free. */
+libssig_status libssig_mime_type_detect(
+    const unsigned char* data,
+    size_t               len,
+    char**               out_type
 );
 
 #endif

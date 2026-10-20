@@ -56,7 +56,8 @@ See [the signing API example](doc/signing.md) for parameters and ownership.
 ## Build
 
 Requires CMake 3.16 or newer, a C99 compiler, `pkg-config`, and the development
-packages for `p11-kit-1` and OpenSSL 3.0 or newer (`libcrypto`).
+packages for `p11-kit-1`, OpenSSL 3.0 or newer (`libcrypto`), and `libmagic`
+(with its magic database).
 
 ```sh
 cmake -S . -B build

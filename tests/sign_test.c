@@ -349,6 +349,7 @@ static int signature_verify(
 }
 
 static const char* fixture_directory;
+static bool        mime_override_only;
 
 static X509* cms_certificate_create(EVP_PKEY* key) {
 	X509* cert = X509_new();
@@ -461,8 +462,8 @@ static int cades_cardinality_check(CMS_ContentInfo* cms) {
 }
 
 static int cades_mime_check(
-    CMS_ContentInfo*           cms,
-    const libssig_sign_params* params
+    CMS_ContentInfo*               cms,
+    const libssig_key_sign_params* params
 ) {
 	CMS_SignerInfo* signer = sk_CMS_SignerInfo_value(
 	    CMS_get0_SignerInfos(cms),
@@ -494,8 +495,8 @@ static int cades_mime_check(
 }
 
 static int cades_content_check(
-    CMS_ContentInfo*           cms,
-    const libssig_sign_params* params
+    CMS_ContentInfo*               cms,
+    const libssig_key_sign_params* params
 ) {
 	CMS_SignerInfo* signer = sk_CMS_SignerInfo_value(
 	    CMS_get0_SignerInfos(cms),
@@ -568,8 +569,8 @@ static int cades_certificate_check(CMS_ContentInfo* cms) {
 }
 
 static int cades_attributes_check(
-    CMS_ContentInfo*           cms,
-    const libssig_sign_params* params
+    CMS_ContentInfo*               cms,
+    const libssig_key_sign_params* params
 ) {
 	CHECK(cades_cardinality_check(cms) == 0);
 	CHECK(cades_mime_check(cms, params) == 0);
@@ -580,9 +581,9 @@ static int cades_attributes_check(
 }
 
 static int cades_certificate_hash_corrupt(
-    CMS_ContentInfo*           cms,
-    const libssig_context*     ctx,
-    const libssig_sign_params* params
+    CMS_ContentInfo*               cms,
+    const libssig_context*         ctx,
+    const libssig_key_sign_params* params
 ) {
 	CMS_SignerInfo* signer = sk_CMS_SignerInfo_value(
 	    CMS_get0_SignerInfos(cms),
@@ -617,8 +618,8 @@ static int cades_certificate_hash_corrupt(
 	    len
 	));
 	OPENSSL_free(encoded);
-	libssig_sign_params signing = *params;
-	unsigned char*      attributes = libssig_cades_attributes_encode(
+	libssig_key_sign_params signing = *params;
+	unsigned char*          attributes = libssig_cades_attributes_encode(
         signer,
         &signing.data_len
     );
@@ -645,13 +646,105 @@ static int cades_certificate_hash_corrupt(
 	return 0;
 }
 
+static libssig_status public_sign(
+    const libssig_context*         ctx,
+    const libssig_key_sign_params* params,
+    const libssig_certificate*     cert,
+    libssig_format                 format,
+    libssig_signature*             output
+) {
+	libssig_sign_params request = {
+	    .token = params->token,
+	    .cert = cert,
+	    .data = params->data,
+	    .data_len = params->data_len,
+	    .pin = params->pin,
+	    .pin_len = params->pin_len,
+	    .algo = params->algo,
+	    .hash = params->hash,
+	    .format = format,
+	    .mime_type = params->mime_type,
+	};
+	return libssig_sign(ctx, &request, output);
+}
+
+static int public_algorithms_invalid_check(
+    const libssig_context*     ctx,
+    const libssig_sign_params* base
+) {
+	libssig_signature   signature = {0};
+	libssig_sign_params request = *base;
+	unsigned int        closes = close_count;
+	request.algo = (libssig_algo)99;
+	CHECK(libssig_sign(ctx, &request, &signature) == LIBSSIG_ERROR_UNSUPPORTED);
+	request = *base;
+	request.hash = (libssig_hash)99;
+	CHECK(libssig_sign(ctx, &request, &signature) == LIBSSIG_ERROR_UNSUPPORTED);
+	request = *base;
+	request.format = (libssig_format)99;
+	CHECK(libssig_sign(ctx, &request, &signature) == LIBSSIG_ERROR_UNSUPPORTED);
+	request = *base;
+	request.mime_type = "text/plain\r\ninvalid";
+	CHECK(libssig_sign(ctx, &request, &signature) == LIBSSIG_ERROR_ARGUMENT);
+	CHECK(
+	    close_count == closes && !signature.data && !signature.len &&
+	    !signature.ck_rv
+	);
+	return 0;
+}
+
+static int public_inputs_invalid_check(
+    const libssig_context*         ctx,
+    const libssig_key_sign_params* params,
+    const libssig_certificate*     cert
+) {
+	libssig_sign_params base = {
+	    .token = params->token,
+	    .cert = cert,
+	    .data = params->data,
+	    .data_len = params->data_len,
+	    .pin = params->pin,
+	    .pin_len = params->pin_len,
+	};
+	libssig_sign_params cases[6];
+	for (size_t i = 0; i < 6; ++i) {
+		cases[i] = base;
+	}
+	cases[0].token = NULL;
+	cases[1].cert = NULL;
+	cases[2].pin = NULL;
+	cases[2].pin_len = 1;
+	cases[3].data = NULL;
+	cases[3].data_len = 1;
+	cases[4].data_len = (size_t)INT_MAX + 1;
+	libssig_certificate invalid = *cert;
+	const unsigned char malformed[] = {0};
+	invalid.der = (unsigned char*)malformed;
+	invalid.der_len = sizeof(malformed);
+	cases[5].cert = &invalid;
+	libssig_signature signature = {0};
+	unsigned int      closes = close_count;
+	for (size_t i = 0; i < 6; ++i) {
+		CHECK(
+		    libssig_sign(ctx, &cases[i], &signature) == LIBSSIG_ERROR_ARGUMENT
+		);
+		CHECK(!signature.data && !signature.len && !signature.ck_rv);
+	}
+	CHECK(close_count == closes);
+	CHECK(public_algorithms_invalid_check(ctx, &base) == 0);
+	return 0;
+}
+
 static int cades_check(
     const libssig_context*     ctx,
-    libssig_sign_params*       params,
+    libssig_key_sign_params*   params,
     const libssig_certificate* cert
 ) {
 	libssig_signature output = {0};
-	CHECK(libssig_cades_sign(ctx, params, cert, &output) == LIBSSIG_OK);
+	CHECK(
+	    public_sign(ctx, params, cert, LIBSSIG_FORMAT_CADES, &output) ==
+	    LIBSSIG_OK
+	);
 	CHECK(cms_verify(&output, params->data, params->data_len) == 0);
 	const unsigned char altered[] = {0, 0xff, 43};
 	CHECK(cms_verify(&output, altered, sizeof(altered)) == -1);
@@ -682,7 +775,53 @@ static int cades_check(
 	return 0;
 }
 
-static int cms_check(const libssig_context* ctx, libssig_sign_params* params) {
+static int cades_mime_detection_check(
+    const libssig_context*         ctx,
+    const libssig_key_sign_params* params,
+    const libssig_certificate*     cert
+) {
+	const unsigned char text[] = "Texto para detección automática de MIME.\n";
+	const unsigned char
+	    pdf[] = "%PDF-1.7\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF\n";
+	const unsigned char* contents[] = {text, pdf, NULL};
+	const size_t         lens[] = {sizeof(text) - 1, sizeof(pdf) - 1, 0};
+	const char*          expected[] =
+	    {"text/plain", "application/pdf", "application/x-empty"};
+	for (size_t i = 0; i < 3; ++i) {
+		libssig_key_sign_params signing = *params;
+		signing.data = contents[i];
+		signing.data_len = lens[i];
+		signing.mime_type = NULL;
+		libssig_signature output = {0};
+		CHECK(
+		    public_sign(ctx, &signing, cert, LIBSSIG_FORMAT_CADES, &output) ==
+		    LIBSSIG_OK
+		);
+		CHECK(
+		    cms_verify(
+		        &output,
+		        signing.data ? signing.data : (const unsigned char*)"",
+		        signing.data_len
+		    ) == 0
+		);
+		const unsigned char* cursor = output.data;
+		CMS_ContentInfo*     cms = d2i_CMS_ContentInfo(
+            NULL,
+            &cursor,
+            (long)output.len
+        );
+		signing.mime_type = expected[i];
+		CHECK(cms && cades_mime_check(cms, &signing) == 0);
+		CMS_ContentInfo_free(cms);
+		libssig_signature_free(&output);
+	}
+	return 0;
+}
+
+static int cms_check(
+    const libssig_context*   ctx,
+    libssig_key_sign_params* params
+) {
 	X509* x509 = cms_certificate_create(rsa);
 	CHECK(x509);
 	unsigned char* der = NULL;
@@ -696,11 +835,16 @@ static int cms_check(const libssig_context* ctx, libssig_sign_params* params) {
 	    .der_len = (size_t)len
 	};
 	libssig_signature output = {0};
-	CHECK(libssig_cms_sign(ctx, params, &cert, &output) == LIBSSIG_OK);
+	CHECK(
+	    public_sign(ctx, params, &cert, LIBSSIG_FORMAT_CMS, &output) ==
+	    LIBSSIG_OK
+	);
 	CHECK(cms_verify(&output, params->data, params->data_len) == 0);
 	CHECK(cades_check(ctx, params, &cert) == 0);
 	if (params->algo == LIBSSIG_ALGO_RSA_PKCS &&
 	    params->hash == LIBSSIG_HASH_SHA256) {
+		CHECK(public_inputs_invalid_check(ctx, params, &cert) == 0);
+		CHECK(cades_mime_detection_check(ctx, params, &cert) == 0);
 		params->mime_type = "application/pdf";
 		CHECK(cades_check(ctx, params, &cert) == 0);
 		params->mime_type = NULL;
@@ -772,8 +916,8 @@ static int cms_check(const libssig_context* ctx, libssig_sign_params* params) {
 }
 
 static int algorithms_check(
-    const libssig_context* ctx,
-    libssig_sign_params*   params
+    const libssig_context*   ctx,
+    libssig_key_sign_params* params
 ) {
 	const EVP_MD* hashes[] = {EVP_sha256(), EVP_sha384(), EVP_sha512()};
 	const CK_MECHANISM_TYPE mechanisms[3][3] = {
@@ -821,7 +965,25 @@ static int algorithms_check(
 			    7
 			));
 			libssig_signature_free(&signature);
-			CHECK(cms_check(ctx, params) == 0);
+			if (mime_override_only) {
+				X509* cert = cms_certificate_create(rsa);
+				CHECK(cert);
+				unsigned char* der = NULL;
+				int            len = i2d_X509(cert, &der);
+				CHECK(len > 0);
+				libssig_certificate selected = {
+				    .id = (unsigned char*)params->id,
+				    .id_len = params->id_len,
+				    .der = der,
+				    .der_len = (size_t)len
+				};
+				params->mime_type = "application/pdf";
+				CHECK(cades_check(ctx, params, &selected) == 0);
+				OPENSSL_free(der);
+				X509_free(cert);
+			} else {
+				CHECK(cms_check(ctx, params) == 0);
+			}
 		}
 	}
 	rsa = saved_rsa;
@@ -845,7 +1007,8 @@ static int algorithms_check(
 }
 
 int main(int argc, char** argv) {
-	fixture_directory = argc == 2 ? argv[1] : NULL;
+	mime_override_only = argc == 2 && !strcmp(argv[1], "--mime-override-only");
+	fixture_directory = argc == 2 && !mime_override_only ? argv[1] : NULL;
 	digest = EVP_sha256();
 	EVP_PKEY_CTX* keygen = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, NULL);
 	CHECK(keygen);
@@ -896,14 +1059,14 @@ int main(int argc, char** argv) {
 	libssig_context             ctx = {.impl = &impl};
 	libssig_token               token = {.uri = "pkcs11:token=test"};
 	const unsigned char         data[] = {0, 1, 0xff, 0, 2};
-	libssig_sign_params         params = {
-	            .token = &token,
-	            .id = id,
-	            .id_len = sizeof(id),
-	            .pin = (const unsigned char*)"1234",
-	            .pin_len = 4,
-	            .data = data,
-	            .data_len = sizeof(data),
+	libssig_key_sign_params     params = {
+	        .token = &token,
+	        .id = id,
+	        .id_len = sizeof(id),
+	        .pin = (const unsigned char*)"1234",
+	        .pin_len = 4,
+	        .data = data,
+	        .data_len = sizeof(data),
     };
 	libssig_signature signature = {0};
 	CHECK(libssig_session_sign(&ctx, &params, &signature) == LIBSSIG_OK);

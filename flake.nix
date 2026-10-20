@@ -38,6 +38,7 @@
 
             buildInputs = with pkgs; [
               p11-kit
+              file
               openssl
             ];
 

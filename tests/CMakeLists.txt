@@ -90,3 +90,18 @@ if(OPENSSL_EXECUTABLE)
             "-DFIXTURES=${CMAKE_CURRENT_BINARY_DIR}/cms-fixtures"
             -P ${CMAKE_CURRENT_SOURCE_DIR}/cms_verify.cmake)
 endif()
+
+# Public-header consumer: no PKCS#11/OpenSSL include paths or internal headers.
+add_executable(public_sign_test public_sign_test.c)
+target_link_libraries(public_sign_test PRIVATE libssig::ssig)
+target_compile_options(public_sign_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME public_sign COMMAND public_sign_test)
+
+add_executable(mime_test mime_test.c)
+target_link_libraries(mime_test PRIVATE libssig::ssig PkgConfig::P11_KIT)
+target_compile_options(mime_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME mime COMMAND mime_test)
+add_test(NAME mime_missing_database COMMAND mime_test --missing-db)
+add_test(NAME sign_mime_override COMMAND sign_test --mime-override-only)
+set_tests_properties(mime_missing_database sign_mime_override PROPERTIES
+    ENVIRONMENT "MAGIC=${CMAKE_CURRENT_BINARY_DIR}/missing-magic-database")

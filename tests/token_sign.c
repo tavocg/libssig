@@ -86,7 +86,11 @@ static unsigned char* id_parse(const char* text, size_t* out_len) {
 	return id;
 }
 
-static bool options_parse(int argc, char** argv, libssig_sign_params* params) {
+static bool options_parse(
+    int                      argc,
+    char**                   argv,
+    libssig_key_sign_params* params
+) {
 	const char* algorithms[] = {"rsa-pkcs", "rsa-pss", "ecdsa"};
 	const char* hashes[] = {"sha256", "sha384", "sha512"};
 #ifdef LIBSSIG_CMS_FILE
@@ -124,7 +128,7 @@ static bool options_parse(int argc, char** argv, libssig_sign_params* params) {
 
 static const libssig_certificate* certificate_find(
     const libssig_certificate_list* certs,
-    const libssig_sign_params*      params
+    const libssig_key_sign_params*  params
 ) {
 	const libssig_certificate* match = NULL;
 	for (size_t i = 0; i < certs->count; ++i) {
@@ -167,10 +171,10 @@ static EVP_PKEY* certificate_key_get(const libssig_certificate* cert) {
 }
 
 static bool pin_read(
-    const libssig_context* ctx,
-    libssig_sign_params*   params,
-    char*                  pin,
-    size_t                 capacity
+    const libssig_context*   ctx,
+    libssig_key_sign_params* params,
+    char*                    pin,
+    size_t                   capacity
 ) {
 	libssig_session s = {0};
 	CK_RV           rv = CKR_OK;
@@ -246,9 +250,9 @@ static unsigned char* ecdsa_der(
 }
 
 static bool verification_init(
-    EVP_MD_CTX*                md,
-    EVP_PKEY*                  key,
-    const libssig_sign_params* params
+    EVP_MD_CTX*                    md,
+    EVP_PKEY*                      key,
+    const libssig_key_sign_params* params
 ) {
 	const EVP_MD* hashes[] = {EVP_sha256(), EVP_sha384(), EVP_sha512()};
 	const EVP_MD* hash = hashes[params->hash];
@@ -273,9 +277,9 @@ static bool verification_init(
 }
 
 static bool signature_verify(
-    EVP_PKEY*                  key,
-    const libssig_sign_params* params,
-    const libssig_signature*   signature
+    EVP_PKEY*                      key,
+    const libssig_key_sign_params* params,
+    const libssig_signature*       signature
 ) {
 	size_t               len = signature->len;
 	unsigned char*       der = NULL;
@@ -362,9 +366,30 @@ static unsigned char* input_read(const char* path, size_t* out_len) {
 }
 #endif
 
+static libssig_status public_file_sign(
+    const libssig_context*         ctx,
+    const libssig_key_sign_params* params,
+    const libssig_certificate*     cert,
+    libssig_signature*             signature
+) {
+	libssig_sign_params request = {
+	    .token = params->token,
+	    .cert = cert,
+	    .data = params->data,
+	    .data_len = params->data_len,
+	    .pin = params->pin,
+	    .pin_len = params->pin_len,
+	    .algo = params->algo,
+	    .hash = params->hash,
+	    .format = LIBSSIG_FORMAT_CADES,
+	    .mime_type = params->mime_type,
+	};
+	return libssig_sign(ctx, &request, signature);
+}
+
 static bool sign_and_verify(
     const libssig_context*     ctx,
-    libssig_sign_params*       params,
+    libssig_key_sign_params*   params,
     EVP_PKEY*                  key,
     const libssig_certificate* cert,
     const char*                output_path
@@ -377,7 +402,7 @@ static bool sign_and_verify(
 
 	libssig_signature signature = {0};
 	libssig_status
-	    status = output_path ? libssig_cades_sign(ctx, params, cert, &signature)
+	    status = output_path ? public_file_sign(ctx, params, cert, &signature)
 	                         : libssig_session_sign(ctx, params, &signature);
 	OPENSSL_cleanse(pin, sizeof(pin));
 	params->pin = NULL;
@@ -414,9 +439,9 @@ static bool sign_and_verify(
 }
 
 static bool test_run(
-    const libssig_context* ctx,
-    libssig_sign_params*   params,
-    const char*            output_path
+    const libssig_context*   ctx,
+    libssig_key_sign_params* params,
+    const char*              output_path
 ) {
 	libssig_certificate_list certs = {0};
 	libssig_status           status = libssig_certificates(
@@ -445,7 +470,7 @@ int main(int argc, char** argv) {
 		return 0;
 	}
 
-	libssig_sign_params params = {
+	libssig_key_sign_params params = {
 	    .data = message,
 	    .data_len = sizeof(message) - 1
 	};

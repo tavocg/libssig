@@ -44,7 +44,7 @@ content still need to be supplied. Empty content is represented by `NULL, 0`.
 | `algo` | `LIBSSIG_ALGO_RSA_PKCS`, `LIBSSIG_ALGO_RSA_PSS`, `LIBSSIG_ALGO_ECDSA` |
 | `hash` | `LIBSSIG_HASH_SHA256`, `LIBSSIG_HASH_SHA384`, `LIBSSIG_HASH_SHA512` |
 | `format` | `LIBSSIG_FORMAT_CADES` (B-B), `LIBSSIG_FORMAT_CMS` (without signed attributes) |
-| `mime_type` | CAdES MIME type, default `application/octet-stream`; ignored for CMS |
+| `mime_type` | Optional CAdES MIME type; NULL detects it from content with libmagic; ignored for CMS |
 
 RSA-PSS uses MGF1 with the selected hash and a salt as long as the digest.
 Every algorithm supports the three hashes when the token implements the required
@@ -52,10 +52,18 @@ combined mechanism. There is no fallback. Unsupported algorithm/hash/format
 values return `LIBSSIG_ERROR_UNSUPPORTED`; provider failures return
 `LIBSSIG_ERROR_PKCS11` with `ck_rv`. Malformed arguments return
 `LIBSSIG_ERROR_ARGUMENT`, and container/verification failures return
-`LIBSSIG_ERROR_CRYPTO`. Check `status` even when `ck_rv` is zero.
+`LIBSSIG_ERROR_CRYPTO`. MIME detection/database failures return
+`LIBSSIG_ERROR_MAGIC`. Check `status` even when `ck_rv` is zero.
+
+When `mime_type` is NULL, CAdES uses libmagic's `MAGIC_MIME_TYPE` detection on
+`data`/`data_len`, without a filename. An explicit MIME value bypasses detection.
+Unrecognized binary content may be classified as `application/octet-stream` by
+libmagic; detection errors fail the operation instead of substituting that type.
+The installed magic database must be available; libmagic honors `MAGIC` when
+selecting the database. CMS does not perform MIME detection.
 
 Inputs are borrowed and are not retained. The library neither prompts for a PIN
-nor reads/writes files. `pin = NULL, pin_len = 0` requests the protected device
+nor reads/writes documents; libmagic may read its local database. `pin = NULL, pin_len = 0` requests the protected device
 path when authentication is needed; an explicitly empty software PIN uses a
 non-NULL pointer with length zero. The application owns and clears its PIN
 buffer after the call. The library does not keep a copy.

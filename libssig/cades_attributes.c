@@ -84,7 +84,7 @@ static bool time_attribute_add(CMS_SignerInfo* signer) {
 
 static bool mime_attribute_add(CMS_SignerInfo* signer, const char* type) {
 	if (!type) {
-		type = "application/octet-stream";
+		return false;
 	}
 
 	size_t len = strlen(type);

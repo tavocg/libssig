@@ -312,5 +312,32 @@ libssig_status libssig_cades_sign(
     const libssig_certificate*     cert,
     libssig_signature*             output
 ) {
-	return detached_sign(ctx, params, cert, true, output);
+	if (!output) {
+		return LIBSSIG_ERROR_ARGUMENT;
+	}
+
+	*output = (libssig_signature){0};
+	if (!params_valid(params, cert)) {
+		return LIBSSIG_ERROR_ARGUMENT;
+	}
+
+	if (params->mime_type) {
+		return detached_sign(ctx, params, cert, true, output);
+	}
+
+	char*          mime_type = NULL;
+	libssig_status status = libssig_mime_type_detect(
+	    params->data,
+	    params->data_len,
+	    &mime_type
+	);
+	if (status != LIBSSIG_OK) {
+		return status;
+	}
+
+	libssig_key_sign_params signing = *params;
+	signing.mime_type = mime_type;
+	status = detached_sign(ctx, &signing, cert, true, output);
+	free(mime_type);
+	return status;
 }

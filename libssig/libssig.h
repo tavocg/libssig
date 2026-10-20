@@ -32,6 +32,7 @@ typedef enum {
 	LIBSSIG_ERROR_AMBIGUOUS,
 	LIBSSIG_ERROR_UNSUPPORTED,
 	LIBSSIG_ERROR_CRYPTO,
+	LIBSSIG_ERROR_MAGIC,
 } libssig_status;
 
 /* Inicializar con {0}. No copiar ni modificar impl.
@@ -225,7 +226,8 @@ typedef struct {
 	libssig_algo         algo;
 	libssig_hash         hash;
 	libssig_format       format;
-	const char* mime_type; /* CAdES: NULL usa application/octet-stream. */
+	const char*
+	    mime_type; /* CAdES: NULL detecta el tipo del contenido con libmagic. */
 } libssig_sign_params;
 
 /* Resultado en memoria propiedad del consumidor; liberar con
@@ -244,7 +246,9 @@ typedef struct {
  * explícito usa un puntero no NULL con pin_len = 0.
  * Devuelve CMS/CAdES DER detached con el certificado incorporado, y comprueba
  * la firma con su clave pública. No valida confianza, vigencia ni revocación.
- * No realiza I/O de archivos ni red. signingTime en CAdES es la hora local
+ * No lee/escribe documentos ni usa red; libmagic lee su base local si hace
+ * falta detectar MIME. Un fallo de detección devuelve LIBSSIG_ERROR_MAGIC.
+ * signingTime en CAdES es la hora local
  * declarada; no es un sello de tiempo de una TSA.
  * Liberar el resultado anterior antes de reutilizar la salida.
  * En error, la salida válida queda vacía; ck_rv conserva el código PKCS#11

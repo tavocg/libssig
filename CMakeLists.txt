@@ -21,6 +21,7 @@ include(CTest)
 find_package(PkgConfig REQUIRED)
 find_package(OpenSSL 3.0 REQUIRED COMPONENTS Crypto)
 pkg_check_modules(P11_KIT REQUIRED IMPORTED_TARGET p11-kit-1)
+pkg_check_modules(MAGIC REQUIRED IMPORTED_TARGET libmagic)
 
 file(GLOB_RECURSE LIBSSIG_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/libssig/*.c"
@@ -32,6 +33,7 @@ add_library(libssig::ssig ALIAS ssig)
 
 target_link_libraries(ssig PRIVATE
     PkgConfig::P11_KIT
+    PkgConfig::MAGIC
     OpenSSL::Crypto
 )
 
