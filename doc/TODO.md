@@ -80,13 +80,19 @@ sign FILE...
      -p PROFILE
 
 sign FILE...
-     [-c CONFIG] [-T TYPE] [-o FILE]
+     [-c CONFIG] [-T TYPE] [-o FILE] [-A TSA_URL]
      [-t URI] [-P PIN] [-k ID]
      [-a ALGORITHM] [-H HASH]
      [-f FORMAT] [-l LEVEL]
 ```
 
 `-p profile` permitiría seleccionar un perfil de la config.
+`-A TSA_URL` seleccionaría la autoridad de sellado de tiempo mediante la URL
+de su servicio RFC 3161, por ejemplo `-A https://tsa.example/timestamp`.
+Al usar `-p PROFILE`, la TSA se definiría dentro del perfil, sin `-A` en esa
+forma de uso.
+El transporte HTTP y la configuración de confianza de esa TSA corresponderían
+a la aplicación. `-T TYPE` conserva la selección del tipo de contenido.
 Además, idealmente la config permitiría `pincmd` y todas las opciones
 tendrían su variable de entorno correspondiente (tienen prioridad los
 argumentos).
