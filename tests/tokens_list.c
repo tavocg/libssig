@@ -159,7 +159,7 @@ int main(void) {
 	}
 
 	libssig_token_list tokens = {0};
-	status = libssig_tokens(&ctx, &tokens, true);
+	status = libssig_tokens(&ctx, &tokens, LIBSSIG_TOKENS_HARDWARE_ONLY);
 	if (status != LIBSSIG_OK) {
 		printf(
 		    "{\"error\": {\"status\": %d, \"ck_rv\": %lu}}\n",

@@ -44,7 +44,7 @@ static libssig_status     token_query(
 	struct libssig_context_impl impl = {.modules = modules};
 	libssig_context             ctx = {.impl = &impl};
 	token_flags = flags;
-	libssig_status status = libssig_tokens(&ctx, &tokens, false);
+	libssig_status status = libssig_tokens(&ctx, &tokens, LIBSSIG_TOKENS_ALL);
 	if (status == LIBSSIG_OK && tokens.count == 1) {
 		*names = tokens.items[0].flag_names;
 	} else if (status == LIBSSIG_OK) {

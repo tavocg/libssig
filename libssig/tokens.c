@@ -392,7 +392,7 @@ void libssig_tokens_free(libssig_token_list* tokens) {
 libssig_status libssig_tokens(
     const libssig_context* ctx,
     libssig_token_list*    tokens,
-    bool                   hardware_only
+    unsigned int           options
 ) {
 	if (!tokens) {
 		return LIBSSIG_ERROR_ARGUMENT;
@@ -404,6 +404,11 @@ libssig_status libssig_tokens(
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
 
+	if (options & ~(unsigned int)LIBSSIG_TOKENS_HARDWARE_ONLY) {
+		return LIBSSIG_ERROR_ARGUMENT;
+	}
+
+	bool hardware_only = (options & LIBSSIG_TOKENS_HARDWARE_ONLY) != 0;
 	libssig_status status = LIBSSIG_OK;
 
 	libssig_token_list collected = {0};

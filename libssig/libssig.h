@@ -129,11 +129,18 @@ typedef struct {
 /* Escribe la versión de la biblioteca cargada; cada salida puede ser NULL. */
 void libssig_version(int* out_major, int* out_minor, int* out_patch);
 
-/* Requiere un contexto abierto. Liberar la salida antes de reutilizarla. */
+typedef enum {
+	LIBSSIG_TOKENS_ALL = 0,
+	LIBSSIG_TOKENS_HARDWARE_ONLY = 1u << 0,
+} libssig_tokens_options;
+
+/* Requiere un contexto abierto. Liberar la salida antes de reutilizarla.
+ * Combinar opciones con |; 0 incluye todos los tokens presentes.
+ * Bits de opciones desconocidos devuelven LIBSSIG_ERROR_ARGUMENT. */
 libssig_status libssig_tokens(
     const libssig_context* ctx,
     libssig_token_list*    tokens,
-    bool                   hardware_only
+    unsigned int           options
 );
 
 void libssig_tokens_free(libssig_token_list* tokens);

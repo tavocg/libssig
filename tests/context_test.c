@@ -16,6 +16,8 @@ static unsigned int      release_count;
 static unsigned int      open_count;
 static unsigned int      close_count;
 static bool              fail_load;
+static CK_FLAGS          slot_flags;
+static unsigned int      slot_info_count;
 static CK_FUNCTION_LIST  module;
 static CK_FUNCTION_LIST* modules[] = {&module, NULL};
 
@@ -41,6 +43,14 @@ static CK_RV mock_slots_get(
 		slots[0] = 1;
 	}
 	*count = 1;
+	return CKR_OK;
+}
+
+static CK_RV mock_slot_info_get(CK_SLOT_ID slot, CK_SLOT_INFO_PTR info) {
+	(void)slot;
+	memset(info, 0, sizeof(*info));
+	info->flags = slot_flags;
+	++slot_info_count;
 	return CKR_OK;
 }
 
@@ -105,6 +115,7 @@ static CK_RV mock_objects_find_final(CK_SESSION_HANDLE handle) {
 
 int main(void) {
 	module.C_GetSlotList = mock_slots_get;
+	module.C_GetSlotInfo = mock_slot_info_get;
 	module.C_GetTokenInfo = mock_token_info_get;
 	module.C_OpenSession = mock_session_open;
 	module.C_CloseSession = mock_session_close;
@@ -118,7 +129,10 @@ int main(void) {
 	CHECK(libssig_context_open(NULL) == LIBSSIG_ERROR_ARGUMENT);
 	libssig_context_close(NULL);
 	libssig_context_close(&ctx);
-	CHECK(libssig_tokens(&ctx, &tokens, false) == LIBSSIG_ERROR_ARGUMENT);
+	CHECK(
+	    libssig_tokens(&ctx, &tokens, LIBSSIG_TOKENS_ALL) ==
+	    LIBSSIG_ERROR_ARGUMENT
+	);
 	CHECK(libssig_certificates(&ctx, &token, &certs) == LIBSSIG_ERROR_ARGUMENT);
 
 	fail_load = true;
@@ -131,7 +145,7 @@ int main(void) {
 	CHECK(load_count == 2);
 
 	for (unsigned int i = 0; i < 2; ++i) {
-		CHECK(libssig_tokens(&ctx, &tokens, false) == LIBSSIG_OK);
+		CHECK(libssig_tokens(&ctx, &tokens, LIBSSIG_TOKENS_ALL) == LIBSSIG_OK);
 		CHECK(tokens.count == 1);
 		CHECK(
 		    libssig_certificates(&ctx, &tokens.items[0], &certs) == LIBSSIG_OK
@@ -140,12 +154,32 @@ int main(void) {
 		libssig_certificates_free(&certs);
 		libssig_tokens_free(&tokens);
 	}
+	CHECK(slot_info_count == 0);
+	CHECK(libssig_tokens(&ctx, &tokens, ~0u) == LIBSSIG_ERROR_ARGUMENT);
+	CHECK(!tokens.items && !tokens.count && !tokens.ck_rv);
+	CHECK(slot_info_count == 0);
+
+	slot_flags = 0;
+	CHECK(
+	    libssig_tokens(&ctx, &tokens, LIBSSIG_TOKENS_HARDWARE_ONLY) ==
+	    LIBSSIG_OK
+	);
+	CHECK(!tokens.items && !tokens.count && slot_info_count == 1);
+	libssig_tokens_free(&tokens);
+
+	slot_flags = CKF_HW_SLOT;
+	CHECK(
+	    libssig_tokens(&ctx, &tokens, LIBSSIG_TOKENS_HARDWARE_ONLY) ==
+	    LIBSSIG_OK
+	);
+	CHECK(tokens.count == 1 && slot_info_count == 2);
+	libssig_tokens_free(&tokens);
 	CHECK(load_count == 2 && release_count == 0);
 	CHECK(open_count == 2 && close_count == 2);
 
 	CHECK(libssig_context_open(&next) == LIBSSIG_OK);
 	libssig_context_close(&next);
-	CHECK(libssig_tokens(&ctx, &tokens, false) == LIBSSIG_OK);
+	CHECK(libssig_tokens(&ctx, &tokens, LIBSSIG_TOKENS_ALL) == LIBSSIG_OK);
 	libssig_context_close(&ctx);
 	CHECK(!ctx.impl && release_count == 2);
 	CHECK(!strcmp(tokens.items[0].label, "test"));
