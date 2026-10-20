@@ -194,6 +194,70 @@ libssig_status libssig_certificates(
 
 void libssig_certificates_free(libssig_certificate_list* certs);
 
+typedef enum {
+	LIBSSIG_ALGO_RSA_PKCS,
+	LIBSSIG_ALGO_RSA_PSS,
+	LIBSSIG_ALGO_ECDSA,
+} libssig_algo;
+
+typedef enum {
+	LIBSSIG_HASH_SHA256,
+	LIBSSIG_HASH_SHA384,
+	LIBSSIG_HASH_SHA512,
+} libssig_hash;
+
+typedef enum {
+	LIBSSIG_FORMAT_CADES,
+	LIBSSIG_FORMAT_CMS,
+} libssig_format;
+
+/* Todos los punteros son prestados y solo se usan durante la llamada.
+ * Inicializar con {0}: RSA PKCS#1 v1.5, SHA-256 y CAdES B-B detached. */
+typedef struct {
+	const libssig_token*       token;
+	const libssig_certificate* cert;
+	/* Bytes originales, no un digest. */
+	const unsigned char* data;
+	size_t               data_len;
+	/* No se conserva ni se solicita interactivamente. */
+	const unsigned char* pin;
+	size_t               pin_len;
+	libssig_algo         algo;
+	libssig_hash         hash;
+	libssig_format       format;
+	const char* mime_type; /* CAdES: NULL usa application/octet-stream. */
+} libssig_sign_params;
+
+/* Resultado en memoria propiedad del consumidor; liberar con
+ * libssig_signature_free. No copiar una estructura con memoria pendiente. */
+typedef struct {
+	unsigned char* data;
+	size_t         len;
+	unsigned long  ck_rv;
+} libssig_signature;
+
+/* Requiere contexto abierto, token con URI y certificado con ID binario y DER.
+ * Selecciona la clave privada por cert->id; debe ser única, del tipo adecuado y
+ * permitir CKA_SIGN. No hay fallback de algoritmo/hash/mecanismo.
+ * Datos hasta INT_MAX bytes; NULL, 0 permite firmar contenido vacío.
+ * PIN NULL, 0 solicita la ruta protegida cuando es necesaria. Un PIN vacío
+ * explícito usa un puntero no NULL con pin_len = 0.
+ * Devuelve CMS/CAdES DER detached con el certificado incorporado, y comprueba
+ * la firma con su clave pública. No valida confianza, vigencia ni revocación.
+ * No realiza I/O de archivos ni red. signingTime en CAdES es la hora local
+ * declarada; no es un sello de tiempo de una TSA.
+ * Liberar el resultado anterior antes de reutilizar la salida.
+ * En error, la salida válida queda vacía; ck_rv conserva el código PKCS#11
+ * cuando existe. Para errores locales puede ser cero: comprobar status. */
+libssig_status libssig_sign(
+    const libssig_context*     ctx,
+    const libssig_sign_params* params,
+    libssig_signature*         signature
+);
+
+/* Acepta NULL y resultados vacíos; deja data = NULL, len = ck_rv = 0. */
+void libssig_signature_free(libssig_signature* signature);
+
 #ifdef __cplusplus
 }
 #endif

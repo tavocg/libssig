@@ -41,18 +41,6 @@ libssig_status libssig_certificates_collect(
     CK_RV*                    out_rv
 );
 
-typedef enum {
-	LIBSSIG_ALGO_RSA_PKCS,
-	LIBSSIG_ALGO_RSA_PSS,
-	LIBSSIG_ALGO_ECDSA,
-} libssig_algo;
-
-typedef enum {
-	LIBSSIG_HASH_SHA256,
-	LIBSSIG_HASH_SHA384,
-	LIBSSIG_HASH_SHA512,
-} libssig_hash;
-
 /* Firma interna: datos originales, no un digest. ID binario obligatorio.
  * No conserva PIN ni handles. El contexto permanece abierto.
  * NULL, 0 como PIN solicita autenticación protegida cuando sea necesaria. */
@@ -67,13 +55,7 @@ typedef struct {
 	libssig_algo         algo;
 	libssig_hash         hash;
 	const char* mime_type; /* CAdES: NULL usa application/octet-stream. */
-} libssig_sign_params;
-
-typedef struct {
-	unsigned char* data;
-	size_t         len;
-	unsigned long  ck_rv;
-} libssig_signature;
+} libssig_key_sign_params;
 
 /* Handle válido únicamente mientras s permanezca abierta. */
 libssig_status libssig_private_key_find(
@@ -91,11 +73,10 @@ libssig_status libssig_private_key_find(
  * PSS usa MGF1 con el mismo hash y salt del tamaño del digest.
  * No produce CMS/CAdES. */
 libssig_status libssig_session_sign(
-    const libssig_context*     ctx,
-    const libssig_sign_params* params,
-    libssig_signature*         signature
+    const libssig_context*         ctx,
+    const libssig_key_sign_params* params,
+    libssig_signature*             signature
 );
-void libssig_signature_free(libssig_signature* signature);
 
 /* Metadatos propiedad del certificado; leer sobre una salida vacía. */
 libssig_status libssig_certificate_metadata_read(libssig_certificate* cert);
@@ -107,20 +88,20 @@ void           libssig_certificate_metadata_clear(libssig_certificate* cert);
  * El ID del certificado debe coincidir con params->id.
  * Liberar salida con libssig_signature_free antes de reutilizar. */
 libssig_status libssig_cms_sign(
-    const libssig_context*     ctx,
-    const libssig_sign_params* params,
-    const libssig_certificate* cert,
-    libssig_signature*         output
+    const libssig_context*         ctx,
+    const libssig_key_sign_params* params,
+    const libssig_certificate*     cert,
+    libssig_signature*             output
 );
 
 /* CAdES B-B DER detached: atributos firmados y signingCertificateV2.
  * Mismas reglas de propiedad y límites que libssig_cms_sign.
  * signingTime es hora declarada local, no un sello de tiempo de una TSA. */
 libssig_status libssig_cades_sign(
-    const libssig_context*     ctx,
-    const libssig_sign_params* params,
-    const libssig_certificate* cert,
-    libssig_signature*         output
+    const libssig_context*         ctx,
+    const libssig_key_sign_params* params,
+    const libssig_certificate*     cert,
+    libssig_signature*             output
 );
 
 #endif

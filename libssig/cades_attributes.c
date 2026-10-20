@@ -41,9 +41,9 @@ ASN1_ITEM_TEMPLATE(libssig_signed_attributes) = ASN1_EX_TEMPLATE_TYPE(
 }
 
 static bool content_attributes_add(
-    CMS_SignerInfo*            signer,
-    const libssig_sign_params* params,
-    const EVP_MD*              digest
+    CMS_SignerInfo*                signer,
+    const libssig_key_sign_params* params,
+    const EVP_MD*                  digest
 ) {
 	unsigned char       hash[EVP_MAX_MD_SIZE];
 	unsigned int        len = 0;
@@ -110,10 +110,10 @@ static bool mime_attribute_add(CMS_SignerInfo* signer, const char* type) {
 }
 
 bool libssig_cades_attributes_add(
-    CMS_SignerInfo*            signer,
-    X509*                      cert,
-    const libssig_sign_params* params,
-    const EVP_MD*              digest
+    CMS_SignerInfo*                signer,
+    X509*                          cert,
+    const libssig_key_sign_params* params,
+    const EVP_MD*                  digest
 ) {
 	return content_attributes_add(signer, params, digest) &&
 	       certificate_attribute_add(signer, cert, digest) &&

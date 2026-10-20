@@ -144,9 +144,9 @@ static bool signature_set(
 }
 
 static CMS_ContentInfo* container_create(
-    X509*                      cert,
-    const libssig_sign_params* params,
-    bool                       cades
+    X509*                          cert,
+    const libssig_key_sign_params* params,
+    bool                           cades
 ) {
 	CMS_ContentInfo* cms = CMS_sign(
 	    NULL,
@@ -179,8 +179,8 @@ static CMS_ContentInfo* container_create(
 }
 
 static bool container_verify(
-    CMS_ContentInfo*           cms,
-    const libssig_sign_params* params
+    CMS_ContentInfo*               cms,
+    const libssig_key_sign_params* params
 ) {
 	const unsigned char empty = 0;
 	const void*         data = params->data ? params->data : &empty;
@@ -224,8 +224,8 @@ static libssig_status container_encode(
 }
 
 static bool params_valid(
-    const libssig_sign_params* params,
-    const libssig_certificate* cert
+    const libssig_key_sign_params* params,
+    const libssig_certificate*     cert
 ) {
 	return params && cert && params->id && cert->id && params->id_len &&
 	       params->id_len == cert->id_len &&
@@ -234,18 +234,18 @@ static bool params_valid(
 }
 
 static libssig_status container_sign(
-    const libssig_context*     ctx,
-    const libssig_sign_params* params,
-    CMS_ContentInfo*           cms,
-    bool                       cades,
-    libssig_signature*         output
+    const libssig_context*         ctx,
+    const libssig_key_sign_params* params,
+    CMS_ContentInfo*               cms,
+    bool                           cades,
+    libssig_signature*             output
 ) {
 	CMS_SignerInfo* signer = sk_CMS_SignerInfo_value(
 	    CMS_get0_SignerInfos(cms),
 	    0
 	);
-	libssig_sign_params signing = *params;
-	unsigned char*      attributes = NULL;
+	libssig_key_sign_params signing = *params;
+	unsigned char*          attributes = NULL;
 	if (cades) {
 		attributes = libssig_cades_attributes_encode(signer, &signing.data_len);
 		if (!attributes) {
@@ -268,11 +268,11 @@ static libssig_status container_sign(
 }
 
 static libssig_status detached_sign(
-    const libssig_context*     ctx,
-    const libssig_sign_params* params,
-    const libssig_certificate* cert,
-    bool                       cades,
-    libssig_signature*         output
+    const libssig_context*         ctx,
+    const libssig_key_sign_params* params,
+    const libssig_certificate*     cert,
+    bool                           cades,
+    libssig_signature*             output
 ) {
 	if (!output) {
 		return LIBSSIG_ERROR_ARGUMENT;
@@ -298,19 +298,19 @@ static libssig_status detached_sign(
 }
 
 libssig_status libssig_cms_sign(
-    const libssig_context*     ctx,
-    const libssig_sign_params* params,
-    const libssig_certificate* cert,
-    libssig_signature*         output
+    const libssig_context*         ctx,
+    const libssig_key_sign_params* params,
+    const libssig_certificate*     cert,
+    libssig_signature*             output
 ) {
 	return detached_sign(ctx, params, cert, false, output);
 }
 
 libssig_status libssig_cades_sign(
-    const libssig_context*     ctx,
-    const libssig_sign_params* params,
-    const libssig_certificate* cert,
-    libssig_signature*         output
+    const libssig_context*         ctx,
+    const libssig_key_sign_params* params,
+    const libssig_certificate*     cert,
+    libssig_signature*             output
 ) {
 	return detached_sign(ctx, params, cert, true, output);
 }

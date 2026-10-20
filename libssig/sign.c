@@ -11,8 +11,8 @@ typedef struct {
 } sign_plan;
 
 static libssig_status sign_plan_create(
-    const libssig_sign_params* params,
-    sign_plan*                 plan
+    const libssig_key_sign_params* params,
+    sign_plan*                     plan
 ) {
 	static const struct {
 		libssig_hash         hash;
@@ -117,11 +117,11 @@ static libssig_status key_authentication_get(
 }
 
 static libssig_status sign_operation_init(
-    libssig_session*           s,
-    CK_OBJECT_HANDLE           key,
-    const libssig_sign_params* params,
-    sign_plan*                 plan,
-    CK_RV*                     out_rv
+    libssig_session*               s,
+    CK_OBJECT_HANDLE               key,
+    const libssig_key_sign_params* params,
+    sign_plan*                     plan,
+    CK_RV*                         out_rv
 ) {
 	CK_BBOOL       required = CK_FALSE;
 	libssig_status status = key_authentication_get(s, key, &required, out_rv);
@@ -174,9 +174,9 @@ static libssig_status signature_allocate(
 }
 
 static libssig_status signature_read(
-    libssig_session*           s,
-    const libssig_sign_params* params,
-    libssig_signature*         signature
+    libssig_session*               s,
+    const libssig_key_sign_params* params,
+    libssig_signature*             signature
 ) {
 	unsigned char  empty = 0;
 	CK_BYTE_PTR    data = params->data ? (CK_BYTE_PTR)params->data : &empty;
@@ -216,10 +216,10 @@ static libssig_status signature_read(
 }
 
 static libssig_status session_sign(
-    libssig_session*           s,
-    const libssig_sign_params* params,
-    sign_plan*                 plan,
-    libssig_signature*         signature
+    libssig_session*               s,
+    const libssig_key_sign_params* params,
+    sign_plan*                     plan,
+    libssig_signature*             signature
 ) {
 	CK_RV rv = CKR_OK;
 	libssig_status
@@ -245,7 +245,7 @@ static libssig_status session_sign(
 	return status == LIBSSIG_OK ? signature_read(s, params, signature) : status;
 }
 
-static bool sign_params_valid(const libssig_sign_params* params) {
+static bool sign_params_valid(const libssig_key_sign_params* params) {
 	return params && params->token && params->token->uri && params->id &&
 	       params->id_len && params->id_len <= ULONG_MAX &&
 	       (params->pin || !params->pin_len) && params->pin_len <= ULONG_MAX &&
@@ -283,9 +283,9 @@ static libssig_status signature_finish(
 }
 
 libssig_status libssig_session_sign(
-    const libssig_context*     ctx,
-    const libssig_sign_params* params,
-    libssig_signature*         signature
+    const libssig_context*         ctx,
+    const libssig_key_sign_params* params,
+    libssig_signature*             signature
 ) {
 	if (!signature) {
 		return LIBSSIG_ERROR_ARGUMENT;

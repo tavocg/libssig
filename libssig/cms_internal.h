@@ -8,10 +8,10 @@
 #define LIBSSIG_CADES_MIME_TYPE_OID "0.4.0.1733.2.1"
 
 bool libssig_cades_attributes_add(
-    CMS_SignerInfo*            signer,
-    X509*                      cert,
-    const libssig_sign_params* params,
-    const EVP_MD*              digest
+    CMS_SignerInfo*                signer,
+    X509*                          cert,
+    const libssig_key_sign_params* params,
+    const EVP_MD*                  digest
 );
 /* DER SET OF firmado por el token; liberar con OPENSSL_free. */
 unsigned char* libssig_cades_attributes_encode(
