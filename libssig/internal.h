@@ -100,4 +100,16 @@ void libssig_signature_free(libssig_signature* signature);
 libssig_status libssig_certificate_metadata_read(libssig_certificate* cert);
 void           libssig_certificate_metadata_clear(libssig_certificate* cert);
 
+/* CMS SignedData DER detached, con certificado, sin atributos firmados.
+ * No es CAdES. Firma los bytes originales (máximo INT_MAX) y comprueba
+ * correspondencia criptográfica, no confianza/vigencia/revocación.
+ * El ID del certificado debe coincidir con params->id.
+ * Liberar salida con libssig_signature_free antes de reutilizar. */
+libssig_status libssig_cms_sign(
+    const libssig_context*     ctx,
+    const libssig_sign_params* params,
+    const libssig_certificate* cert,
+    libssig_signature*         output
+);
+
 #endif
