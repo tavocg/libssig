@@ -57,3 +57,8 @@ add_executable(token_flags_test token_flags_test.c)
 target_link_libraries(token_flags_test PRIVATE libssig::ssig PkgConfig::P11_KIT)
 target_compile_options(token_flags_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME token_flags COMMAND token_flags_test)
+
+add_executable(sign_test sign_test.c)
+target_link_libraries(sign_test PRIVATE libssig::ssig PkgConfig::P11_KIT OpenSSL::Crypto)
+target_compile_options(sign_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME sign COMMAND sign_test)
