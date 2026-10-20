@@ -38,7 +38,11 @@ static ASN1_TYPE* attribute_get(CMS_SignerInfo* s, int nid, bool* valid) {
 	return X509_ATTRIBUTE_get0_type(attr, 0);
 }
 
-static bool ess_check(CMS_SignerInfo* s, X509* cert, STACK_OF(X509) * certs) {
+bool libssig_verify_ess_check(
+    CMS_SignerInfo* s,
+    X509*           cert,
+    STACK_OF(X509) * certs
+) {
 	bool       valid = true;
 	ASN1_TYPE* v1 = attribute_get(
 	    s,
@@ -144,7 +148,7 @@ static libssig_status signer_copy(
 ) {
 	X509* cert = NULL;
 	CMS_SignerInfo_get0_algs(s, NULL, &cert, NULL, NULL);
-	if (!cert || !ess_check(s, cert, certs)) {
+	if (!cert || !libssig_verify_ess_check(s, cert, certs)) {
 		return LIBSSIG_ERROR_VERIFY;
 	}
 

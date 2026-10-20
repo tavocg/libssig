@@ -37,6 +37,7 @@ typedef enum {
 	LIBSSIG_ERROR_CONTENT_REQUIRED,
 	LIBSSIG_ERROR_VERIFY,
 	LIBSSIG_ERROR_TRUST,
+	LIBSSIG_ERROR_TIMESTAMP,
 } libssig_status;
 
 /* Inicializar con {0}. No copiar ni modificar impl.
@@ -331,6 +332,69 @@ libssig_status libssig_verify(
     libssig_verify_result*       result
 );
 void libssig_verify_free(libssig_verify_result* result);
+
+typedef enum {
+	LIBSSIG_TIMESTAMP_SYSTEM_TRUST = 1u << 0,
+} libssig_timestamp_options;
+
+/* Contenedor CAdES DER; signer_index identifica al firmante en esta entrada.
+ * hash = 0 usa SHA-256 para el sello, independientemente de la firma original.
+ * policy_oid opcional: OID numérico de la política exigida a la TSA. */
+typedef struct {
+	const unsigned char* data;
+
+	size_t       data_len;
+	size_t       signer_index;
+	libssig_hash hash;
+	const char*  policy_oid;
+} libssig_timestamp_request_params;
+
+/* Genera TimeStampReq DER con nonce aleatorio de 128 bits y certReq=true.
+ * Sella el valor de firma; no necesita el documento de una firma detached.
+ * Comprueba atributos firmados y vínculo ESS del firmante seleccionado,
+ * pero no el documento original, su confianza ni cumplimiento completo CAdES.
+ * Rechaza un sello existente en el firmante seleccionado.
+ * Resultado propietario: liberar con libssig_signature_free; ck_rv = 0. */
+libssig_status libssig_timestamp_request(
+    const libssig_timestamp_request_params* params,
+    libssig_signature*                      request
+);
+
+typedef struct {
+	const unsigned char* data;
+
+	size_t               data_len;
+	size_t               signer_index;
+	const unsigned char* request;
+
+	size_t               request_len;
+	const unsigned char* response;
+
+	size_t response_len;
+	/* Confianza independiente para la TSA: PEM/DER, igual que verify. */
+	const unsigned char* ca_data;
+
+	size_t               ca_data_len;
+	const unsigned char* intermediates_data;
+
+	size_t       intermediates_data_len;
+	unsigned int options;
+} libssig_timestamp_params;
+
+/* Valida respuesta RFC 3161 contra solicitud y firma, nonce, política,
+ * firma TSA, ESS, EKU timeStamping y confianza. Exige ca_data o SYSTEM_TRUST.
+ * Incorpora el token como atributo no firmado signature-time-stamp.
+ * Rechaza genTime a más de 300 segundos en el futuro. Valida la cadena TSA
+ * a la hora actual; no consulta revocación ni establece validación histórica.
+ * ERROR_TIMESTAMP indica respuesta no concedida; ERROR_TRUST, cadena TSA
+ * no confiable; ERROR_VERIFY, respuesta/firma/solicitud incompatibles.
+ * No usa red, archivos, token ni PIN; la aplicación transporta TSQ/TSR.
+ * Resultado propietario: liberar con libssig_signature_free; vacío en error.
+ * Entradas DER hasta INT_MAX bytes; no modifica la entrada. */
+libssig_status libssig_timestamp(
+    const libssig_timestamp_params* params,
+    libssig_signature*              signature
+);
 
 #ifdef __cplusplus
 }

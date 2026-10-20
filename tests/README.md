@@ -168,3 +168,17 @@ Neither external nor embedded intermediates become trusted authorities.
 untrusted issuers, PEM and DER, duplicate/malformed bundles, and custom/system
 store combinations. `verify_cli` checks command parsing, failure exit codes,
 and compares the custom chain with independent OpenSSL verification.
+
+## RFC 3161 signature timestamping
+
+```sh
+ctest --test-dir build -R '^timestamp$' --output-on-failure
+```
+
+The test creates a local TSA and timestamps all nine original algorithm/hash
+combinations in attached and detached CAdES. It checks nonce, policy, imprint,
+TSA signature/purpose/trust, future times, malformed/rejected responses and
+existing timestamps. OpenSSL independently checks the response against its
+request and verifies that the resulting container preserves the document.
+No token, PIN, network, or external TSA is used. See
+[timestamping](../doc/timestamping.md) for the application-side transport example.

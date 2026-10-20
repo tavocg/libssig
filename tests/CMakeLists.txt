@@ -127,3 +127,14 @@ add_test(NAME verify_cli
         "-DOPENSSL=${OPENSSL_EXECUTABLE}"
         "-DFIXTURES=${CMAKE_CURRENT_BINARY_DIR}/verify-fixtures"
         -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_cli.cmake)
+
+add_executable(timestamp_test timestamp_test.c)
+target_link_libraries(timestamp_test PRIVATE libssig::ssig OpenSSL::Crypto)
+target_compile_options(timestamp_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME timestamp
+    COMMAND ${CMAKE_COMMAND}
+        "-DSIGN_TEST=$<TARGET_FILE:sign_test>"
+        "-DTIMESTAMP_TEST=$<TARGET_FILE:timestamp_test>"
+        "-DOPENSSL=${OPENSSL_EXECUTABLE}"
+        "-DFIXTURES=${CMAKE_CURRENT_BINARY_DIR}/timestamp-fixtures"
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/timestamp_verify.cmake)

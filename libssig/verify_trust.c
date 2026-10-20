@@ -109,7 +109,7 @@ libssig_status libssig_verify_certs_append(
 	return LIBSSIG_OK;
 }
 
-static libssig_status store_create(
+libssig_status libssig_verify_store_create(
     const libssig_verify_params* params,
     const STACK_OF(X509) * roots,
     X509_STORE** out_store
@@ -161,7 +161,7 @@ libssig_status libssig_verify_trust_check(
     libssig_verify_result* result
 ) {
 	X509_STORE*    store = NULL;
-	libssig_status status = store_create(params, roots, &store);
+	libssig_status status = libssig_verify_store_create(params, roots, &store);
 	if (status != LIBSSIG_OK) {
 		X509_STORE_free(store);
 		return status;

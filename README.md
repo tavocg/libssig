@@ -20,6 +20,8 @@ A small C library for digital signing using PKCS#11 through `p11-kit`.
 - `libssig_signature_free`
 - `libssig_verify`
 - `libssig_verify_free`
+- `libssig_timestamp_request`
+- `libssig_timestamp`
 
 Get the loaded library version (each output pointer may be `NULL`):
 
@@ -60,6 +62,10 @@ See [the signing API example](doc/signing.md) for parameters and ownership.
 `LIBSSIG_VERIFY_SYSTEM_TRUST` or custom roots in `ca_data` also require trusted
 certificate chains. Additional intermediates can be supplied separately.
 See [the verification API](doc/verification.md).
+
+RFC 3161 timestamping generates a request and incorporates a validated TSA
+response into an existing CAdES signature. The application handles transport.
+See [timestamping](doc/timestamping.md).
 
 ## Build
 
