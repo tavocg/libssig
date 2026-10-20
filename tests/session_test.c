@@ -80,10 +80,11 @@ int main(void) {
 	module.C_GetTokenInfo = mock_token_info_get;
 	module.C_OpenSession = mock_session_open;
 	module.C_CloseSession = mock_session_close;
-	CK_FUNCTION_LIST* modules[] = {&module, NULL};
-	libssig_context   ctx = {.modules = modules};
-	libssig_session   s = {0};
-	CK_RV             rv = CKR_OK;
+	CK_FUNCTION_LIST*           modules[] = {&module, NULL};
+	struct libssig_context_impl impl = {.modules = modules};
+	libssig_context             ctx = {.impl = &impl};
+	libssig_session             s = {0};
+	CK_RV                       rv = CKR_OK;
 	CHECK(
 	    libssig_session_open(&ctx, "pkcs11:token=test", &s, &rv) == LIBSSIG_OK
 	);

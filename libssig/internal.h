@@ -5,9 +5,9 @@
 #include <libssig/libssig.h>
 #include <p11-kit/p11-kit.h>
 
-typedef struct {
+struct libssig_context_impl {
 	CK_FUNCTION_LIST** modules;
-} libssig_context;
+};
 
 /* El contexto debe permanecer abierto mientras existan sesiones. */
 typedef struct {
@@ -18,8 +18,6 @@ typedef struct {
 } libssig_session;
 
 /* Inicializar los recursos con {0}; cerrarlos antes de reutilizarlos. */
-libssig_status libssig_context_open(libssig_context* ctx);
-void           libssig_context_close(libssig_context* ctx);
 libssig_status libssig_session_open(
     const libssig_context* ctx,
     const char*            uri,

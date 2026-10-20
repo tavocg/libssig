@@ -41,41 +41,13 @@ static void string_field_print(const char* name, const char* value) {
 	puts(",");
 }
 
-static void flags_print(unsigned long flags) {
-	static const struct {
-		unsigned long value;
-		const char*   name;
-	} names[] = {
-	    {CKF_RNG, "rng"},
-	    {CKF_WRITE_PROTECTED, "write-protected"},
-	    {CKF_LOGIN_REQUIRED, "login-required"},
-	    {CKF_USER_PIN_INITIALIZED, "user-pin-initialized"},
-	    {CKF_RESTORE_KEY_NOT_NEEDED, "restore-key-not-needed"},
-	    {CKF_CLOCK_ON_TOKEN, "clock-on-token"},
-	    {CKF_PROTECTED_AUTHENTICATION_PATH, "protected-authentication-path"},
-	    {CKF_DUAL_CRYPTO_OPERATIONS, "dual-crypto-operations"},
-	    {CKF_TOKEN_INITIALIZED, "token-initialized"},
-	    {CKF_SECONDARY_AUTHENTICATION, "secondary-authentication"},
-	    {CKF_USER_PIN_COUNT_LOW, "user-pin-count-low"},
-	    {CKF_USER_PIN_FINAL_TRY, "user-pin-final-try"},
-	    {CKF_USER_PIN_LOCKED, "user-pin-locked"},
-	    {CKF_USER_PIN_TO_BE_CHANGED, "user-pin-to-be-changed"},
-	    {CKF_SO_PIN_COUNT_LOW, "so-pin-count-low"},
-	    {CKF_SO_PIN_FINAL_TRY, "so-pin-final-try"},
-	    {CKF_SO_PIN_LOCKED, "so-pin-locked"},
-	    {CKF_SO_PIN_TO_BE_CHANGED, "so-pin-to-be-changed"},
-	    {CKF_ERROR_STATE, "error-state"},
-	};
+static void flags_print(unsigned long flags, const libssig_string_list* names) {
 	printf("      \"flags\": %lu,\n      \"flag_names\": [", flags);
-	bool first = true;
-	for (size_t i = 0; i < sizeof(names) / sizeof(names[0]); ++i) {
-		if (flags & names[i].value) {
-			if (!first) {
-				fputs(", ", stdout);
-			}
-			json_string_print(names[i].name);
-			first = false;
+	for (size_t i = 0; i < names->count; ++i) {
+		if (i) {
+			fputs(", ", stdout);
 		}
+		json_string_print(names->items[i]);
 	}
 	puts("],");
 }
@@ -136,7 +108,7 @@ static void token_print(
 	string_field_print("manufacturer", token->manufacturer);
 	string_field_print("model", token->model);
 	string_field_print("serial", token->serial);
-	flags_print(token->flags);
+	flags_print(token->flags, &token->flag_names);
 	printf(
 	    "      \"hardware_version\": {\"major\": %u, \"minor\": %u},\n",
 	    (unsigned)token->hardware_version.major,
@@ -179,8 +151,14 @@ static void token_print(
 }
 
 int main(void) {
+	libssig_context ctx = {0};
+	libssig_status  status = libssig_context_open(&ctx);
+	if (status != LIBSSIG_OK) {
+		fprintf(stderr, "Cargar módulos: status=%d\n", (int)status);
+		return 1;
+	}
 	libssig_token_list tokens = {0};
-	libssig_status     status = libssig_tokens(&tokens, true);
+	status = libssig_tokens(&ctx, &tokens, true);
 
 	if (status != LIBSSIG_OK) {
 		printf(
@@ -189,13 +167,14 @@ int main(void) {
 		    tokens.ck_rv
 		);
 		libssig_tokens_free(&tokens);
+		libssig_context_close(&ctx);
 		return 1;
 	}
 
 	printf("{\n  \"count\": %zu,\n  \"tokens\": [\n", tokens.count);
 	for (size_t i = 0; i < tokens.count; ++i) {
 		libssig_certificate_list certs = {0};
-		status = libssig_certificates(&tokens.items[i], &certs);
+		status = libssig_certificates(&ctx, &tokens.items[i], &certs);
 		if (status != LIBSSIG_OK) {
 			fprintf(
 			    stderr,
@@ -205,6 +184,7 @@ int main(void) {
 			);
 			libssig_certificates_free(&certs);
 			libssig_tokens_free(&tokens);
+			libssig_context_close(&ctx);
 			return 1;
 		}
 		token_print(&tokens.items[i], &certs);
@@ -214,5 +194,6 @@ int main(void) {
 
 	puts("  ]\n}");
 	libssig_tokens_free(&tokens);
+	libssig_context_close(&ctx);
 	return 0;
 }

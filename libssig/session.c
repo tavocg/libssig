@@ -88,8 +88,8 @@ static libssig_status token_select(
 		return status;
 	}
 	status = LIBSSIG_OK;
-	for (size_t i = 0; ctx->modules[i]; ++i) {
-		status = module_token_find(ctx->modules[i], uri, s, out_rv);
+	for (size_t i = 0; ctx->impl->modules[i]; ++i) {
+		status = module_token_find(ctx->impl->modules[i], uri, s, out_rv);
 		if (status != LIBSSIG_OK) {
 			break;
 		}
@@ -107,7 +107,8 @@ libssig_status libssig_session_open(
     libssig_session*       s,
     CK_RV*                 out_rv
 ) {
-	if (!ctx || !ctx->modules || !uri || !s || !out_rv || s->open) {
+	if (!ctx || !ctx->impl || !ctx->impl->modules || !uri || !s || !out_rv ||
+	    s->open) {
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
 	*out_rv = CKR_OK;

@@ -43,3 +43,17 @@ add_executable(version_test version_test.c)
 target_link_libraries(version_test PRIVATE libssig::ssig)
 target_compile_options(version_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
 add_test(NAME version COMMAND version_test)
+
+# Compile the implementation with a simulated module loader for lifecycle checks.
+add_executable(context_test context_test.c
+    ../libssig/context.c ../libssig/tokens.c
+    ../libssig/certificates.c ../libssig/session.c)
+target_include_directories(context_test PRIVATE ${PROJECT_SOURCE_DIR})
+target_link_libraries(context_test PRIVATE PkgConfig::P11_KIT)
+target_compile_options(context_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME context COMMAND context_test)
+
+add_executable(token_flags_test token_flags_test.c)
+target_link_libraries(token_flags_test PRIVATE libssig::ssig PkgConfig::P11_KIT)
+target_compile_options(token_flags_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME token_flags COMMAND token_flags_test)

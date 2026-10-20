@@ -142,10 +142,13 @@ int main(void) {
 	);
 	CHECK(rv == CKR_GENERAL_ERROR && !certs.items);
 	CHECK(finalize_count == 7);
-	CHECK(libssig_certificates(NULL, &certs) == LIBSSIG_ERROR_ARGUMENT);
+	CK_FUNCTION_LIST*           modules[] = {&module, NULL};
+	struct libssig_context_impl impl = {.modules = modules};
+	libssig_context             ctx = {.impl = &impl};
+	CHECK(libssig_certificates(&ctx, NULL, &certs) == LIBSSIG_ERROR_ARGUMENT);
 	libssig_token token = {0};
-	CHECK(libssig_certificates(&token, &certs) == LIBSSIG_ERROR_ARGUMENT);
-	CHECK(libssig_certificates(&token, NULL) == LIBSSIG_ERROR_ARGUMENT);
+	CHECK(libssig_certificates(&ctx, &token, &certs) == LIBSSIG_ERROR_ARGUMENT);
+	CHECK(libssig_certificates(&ctx, &token, NULL) == LIBSSIG_ERROR_ARGUMENT);
 	libssig_certificates_free(NULL);
 	return 0;
 }

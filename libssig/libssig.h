@@ -32,6 +32,16 @@ typedef enum {
 	LIBSSIG_ERROR_AMBIGUOUS,
 } libssig_status;
 
+/* Inicializar con {0}. No copiar ni modificar impl.
+ * Mantener abierto durante todas las operaciones y sesiones que lo usan.
+ * El consumidor sincroniza el cierre y cualquier reemplazo del contexto. */
+typedef struct {
+	struct libssig_context_impl* impl;
+} libssig_context;
+
+libssig_status libssig_context_open(libssig_context* ctx);
+void           libssig_context_close(libssig_context* ctx);
+
 typedef struct {
 	unsigned char major;
 	unsigned char minor;
@@ -60,6 +70,13 @@ typedef struct {
 	unsigned long        ck_rv;
 } libssig_certificate_list;
 
+/* Arreglo dinámico; cadenas constantes propiedad de la biblioteca.
+ * Su memoria se libera junto con el resultado que lo contiene. */
+typedef struct {
+	const char** items;
+	size_t       count;
+} libssig_string_list;
+
 /* Las cadenas pertenecen al resultado y se liberan con libssig_tokens_free. */
 typedef struct {
 	/* URI PKCS#11; puede coincidir con más de un token o módulo. */
@@ -73,6 +90,11 @@ typedef struct {
 
 	/* Máscara CKF_* de CK_TOKEN_INFO; no incluye flags del slot. */
 	unsigned long flags;
+
+	/* Nombres conocidos; bits desconocidos omitidos. Sin terminador NULL.
+	 * Como máximo sizeof(unsigned long) * CHAR_BIT entradas.
+	 * No modificar ni liberar por separado. */
+	libssig_string_list flag_names;
 
 	/* 0 indica sin límite fijo; ~0UL indica información no disponible. */
 	unsigned long max_session_count;
@@ -107,11 +129,17 @@ typedef struct {
 /* Escribe la versión de la biblioteca cargada; cada salida puede ser NULL. */
 void libssig_version(int* out_major, int* out_minor, int* out_patch);
 
-libssig_status libssig_tokens(libssig_token_list* tokens, bool hardware_only);
+/* Requiere un contexto abierto. Liberar la salida antes de reutilizarla. */
+libssig_status libssig_tokens(
+    const libssig_context* ctx,
+    libssig_token_list*    tokens,
+    bool                   hardware_only
+);
 
 void libssig_tokens_free(libssig_token_list* tokens);
 
 libssig_status libssig_certificates(
+    const libssig_context*    ctx,
     const libssig_token*      token,
     libssig_certificate_list* certs
 );

@@ -8,11 +8,77 @@
  */
 
 #include <libssig/internal.h>
+#include <limits.h>
 #include <p11-kit/p11-kit.h>
 #include <p11-kit/uri.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+
+static void string_list_free(libssig_string_list* names) {
+	if (!names) {
+		return;
+	}
+	free(names->items);
+	*names = (libssig_string_list){0};
+}
+
+static libssig_status token_flags_names(
+    unsigned long        flags,
+    libssig_string_list* names
+) {
+	if (!names) {
+		return LIBSSIG_ERROR_ARGUMENT;
+	}
+	*names = (libssig_string_list){0};
+	static const struct {
+		unsigned long value;
+		const char*   name;
+	} flag_names[] = {
+	    {CKF_RNG, "rng"},
+	    {CKF_WRITE_PROTECTED, "write-protected"},
+	    {CKF_LOGIN_REQUIRED, "login-required"},
+	    {CKF_USER_PIN_INITIALIZED, "user-pin-initialized"},
+	    {CKF_RESTORE_KEY_NOT_NEEDED, "restore-key-not-needed"},
+	    {CKF_CLOCK_ON_TOKEN, "clock-on-token"},
+	    {CKF_PROTECTED_AUTHENTICATION_PATH, "protected-authentication-path"},
+	    {CKF_DUAL_CRYPTO_OPERATIONS, "dual-crypto-operations"},
+	    {CKF_TOKEN_INITIALIZED, "token-initialized"},
+	    {CKF_SECONDARY_AUTHENTICATION, "secondary-authentication"},
+	    {CKF_USER_PIN_COUNT_LOW, "user-pin-count-low"},
+	    {CKF_USER_PIN_FINAL_TRY, "user-pin-final-try"},
+	    {CKF_USER_PIN_LOCKED, "user-pin-locked"},
+	    {CKF_USER_PIN_TO_BE_CHANGED, "user-pin-to-be-changed"},
+	    {CKF_SO_PIN_COUNT_LOW, "so-pin-count-low"},
+	    {CKF_SO_PIN_FINAL_TRY, "so-pin-final-try"},
+	    {CKF_SO_PIN_LOCKED, "so-pin-locked"},
+	    {CKF_SO_PIN_TO_BE_CHANGED, "so-pin-to-be-changed"},
+	    {CKF_ERROR_STATE, "error-state"},
+	};
+	size_t count = 0;
+	for (size_t i = 0; i < sizeof(flag_names) / sizeof(flag_names[0]); ++i) {
+		if (flags & flag_names[i].value) {
+			++count;
+		}
+	}
+	if (count > sizeof(flags) * CHAR_BIT ||
+	    count > SIZE_MAX / sizeof(*names->items)) {
+		return LIBSSIG_ERROR_MEMORY;
+	}
+	if (!count) {
+		return LIBSSIG_OK;
+	}
+	names->items = malloc(count * sizeof(*names->items));
+	if (!names->items) {
+		return LIBSSIG_ERROR_MEMORY;
+	}
+	for (size_t i = 0; i < sizeof(flag_names) / sizeof(flag_names[0]); ++i) {
+		if (flags & flag_names[i].value) {
+			names->items[names->count++] = flag_names[i].name;
+		}
+	}
+	return LIBSSIG_OK;
+}
 
 static libssig_status slots_allocate(
     CK_ULONG     slot_count,
@@ -96,7 +162,8 @@ static void token_free(libssig_token* token) {
 	free(token->manufacturer);
 	free(token->model);
 	free(token->serial);
-	*token = (libssig_token){ 0 };
+	string_list_free(&token->flag_names);
+	*token = (libssig_token){0};
 }
 
 static libssig_status token_uri_create(
@@ -123,7 +190,7 @@ static libssig_status token_from_info(
     const CK_TOKEN_INFO* token_info,
     libssig_token*       token
 ) {
-	*token = (libssig_token){ 0 };
+	*token = (libssig_token){0};
 	token->label = token_text_copy(
 	    token_info->label,
 	    sizeof(token_info->label)
@@ -152,12 +219,12 @@ static libssig_status token_from_info(
 	token->total_private_memory = token_info->ulTotalPrivateMemory;
 	token->free_private_memory = token_info->ulFreePrivateMemory;
 	token->hardware_version = (libssig_token_version){
-		token_info->hardwareVersion.major,
-		token_info->hardwareVersion.minor
+	    token_info->hardwareVersion.major,
+	    token_info->hardwareVersion.minor
 	};
 	token->firmware_version = (libssig_token_version){
-		token_info->firmwareVersion.major,
-		token_info->firmwareVersion.minor
+	    token_info->firmwareVersion.major,
+	    token_info->firmwareVersion.minor
 	};
 	if (token_info->flags & CKF_CLOCK_ON_TOKEN) {
 		memcpy(
@@ -173,7 +240,12 @@ static libssig_status token_from_info(
 		return LIBSSIG_ERROR_MEMORY;
 	}
 
-	libssig_status status = token_uri_create(token_info, &token->uri);
+	libssig_status status = token_flags_names(token->flags, &token->flag_names);
+	if (status != LIBSSIG_OK) {
+		token_free(token);
+		return status;
+	}
+	status = token_uri_create(token_info, &token->uri);
 	if (status != LIBSSIG_OK) {
 		token_free(token);
 	}
@@ -198,7 +270,7 @@ static libssig_status tokens_append(
 
 	tokens->items = items;
 	tokens->items[tokens->count++] = *token;
-	*token = (libssig_token){ 0 };
+	*token = (libssig_token){0};
 	return LIBSSIG_OK;
 }
 
@@ -236,7 +308,7 @@ static libssig_status tokens_collect_one(
 		return LIBSSIG_ERROR_PKCS11;
 	}
 
-	libssig_token  token = { 0 };
+	libssig_token  token = {0};
 	libssig_status status = token_from_info(&token_info, &token);
 	if (status != LIBSSIG_OK) {
 		return status;
@@ -306,27 +378,29 @@ void libssig_tokens_free(libssig_token_list* tokens) {
 	}
 
 	free(tokens->items);
-	*tokens = (libssig_token_list){ 0 };
+	*tokens = (libssig_token_list){0};
 }
 
-libssig_status libssig_tokens(libssig_token_list* tokens, bool hardware_only) {
+libssig_status libssig_tokens(
+    const libssig_context* ctx,
+    libssig_token_list*    tokens,
+    bool                   hardware_only
+) {
 	if (!tokens) {
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
 
-	*tokens = (libssig_token_list){ 0 };
+	*tokens = (libssig_token_list){0};
 
-	libssig_context ctx = { 0 };
-	libssig_status  status = libssig_context_open(&ctx);
-
-	if (status != LIBSSIG_OK) {
-		return status;
+	if (!ctx || !ctx->impl || !ctx->impl->modules) {
+		return LIBSSIG_ERROR_ARGUMENT;
 	}
+	libssig_status status = LIBSSIG_OK;
 
-	libssig_token_list collected = { 0 };
-	for (size_t i = 0; ctx.modules[i] != NULL; ++i) {
+	libssig_token_list collected = {0};
+	for (size_t i = 0; ctx->impl->modules[i] != NULL; ++i) {
 		status = module_tokens_collect(
-		    ctx.modules[i],
+		    ctx->impl->modules[i],
 		    hardware_only,
 		    &collected
 		);
@@ -335,12 +409,10 @@ libssig_status libssig_tokens(libssig_token_list* tokens, bool hardware_only) {
 		}
 	}
 
-	libssig_context_close(&ctx);
-
 	if (status != LIBSSIG_OK) {
 		unsigned long ck_rv = collected.ck_rv;
 		libssig_tokens_free(&collected);
-		*tokens = (libssig_token_list){ .ck_rv = ck_rv };
+		*tokens = (libssig_token_list){.ck_rv = ck_rv};
 		return status;
 	}
 
