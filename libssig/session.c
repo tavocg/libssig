@@ -5,15 +5,15 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-static libssig_status match_slot(
+static libssig_status slot_match(
     CK_FUNCTION_LIST* module,
     CK_SLOT_ID        slot,
     P11KitUri*        uri,
-    pkcs11_session*   s,
+    libssig_session*  s,
     CK_RV*            out_rv
 ) {
-	CK_TOKEN_INFO info;
-	*out_rv = module->C_GetTokenInfo(slot, &info);
+	CK_TOKEN_INFO token_info;
+	*out_rv = module->C_GetTokenInfo(slot, &token_info);
 	if (*out_rv == CKR_TOKEN_NOT_PRESENT) {
 		*out_rv = CKR_OK;
 		return LIBSSIG_OK;
@@ -21,7 +21,7 @@ static libssig_status match_slot(
 	if (*out_rv != CKR_OK) {
 		return LIBSSIG_ERROR_PKCS11;
 	}
-	if (!p11_kit_uri_match_token_info(uri, &info)) {
+	if (!p11_kit_uri_match_token_info(uri, &token_info)) {
 		return LIBSSIG_OK;
 	}
 	if (s->module) {
@@ -32,33 +32,33 @@ static libssig_status match_slot(
 	return LIBSSIG_OK;
 }
 
-static libssig_status find_in_module(
+static libssig_status module_token_find(
     CK_FUNCTION_LIST* module,
     P11KitUri*        uri,
-    pkcs11_session*   s,
+    libssig_session*  s,
     CK_RV*            out_rv
 ) {
-	CK_ULONG count = 0;
-	*out_rv = module->C_GetSlotList(CK_TRUE, NULL, &count);
+	CK_ULONG slot_count = 0;
+	*out_rv = module->C_GetSlotList(CK_TRUE, NULL, &slot_count);
 	if (*out_rv != CKR_OK) {
 		return LIBSSIG_ERROR_PKCS11;
 	}
-	if (!count) {
+	if (!slot_count) {
 		return LIBSSIG_OK;
 	}
-	if (count > SIZE_MAX / sizeof(CK_SLOT_ID)) {
+	if (slot_count > SIZE_MAX / sizeof(CK_SLOT_ID)) {
 		return LIBSSIG_ERROR_MEMORY;
 	}
-	CK_SLOT_ID* slots = malloc((size_t)count * sizeof(*slots));
+	CK_SLOT_ID* slots = malloc((size_t)slot_count * sizeof(*slots));
 	if (!slots) {
 		return LIBSSIG_ERROR_MEMORY;
 	}
-	*out_rv = module->C_GetSlotList(CK_TRUE, slots, &count);
+	*out_rv = module->C_GetSlotList(CK_TRUE, slots, &slot_count);
 	libssig_status status = LIBSSIG_ERROR_PKCS11;
 	if (*out_rv == CKR_OK) {
 		status = LIBSSIG_OK;
-		for (CK_ULONG i = 0; i < count; ++i) {
-			status = match_slot(module, slots[i], uri, s, out_rv);
+		for (CK_ULONG i = 0; i < slot_count; ++i) {
+			status = slot_match(module, slots[i], uri, s, out_rv);
 			if (status != LIBSSIG_OK) {
 				break;
 			}
@@ -68,20 +68,20 @@ static libssig_status find_in_module(
 	return status;
 }
 
-static libssig_status select_token(
-    const pkcs11_context* ctx,
-    const char*           text,
-    pkcs11_session*       s,
-    CK_RV*                out_rv
+static libssig_status token_select(
+    const libssig_context* ctx,
+    const char*            uri_text,
+    libssig_session*       s,
+    CK_RV*                 out_rv
 ) {
 	P11KitUri* uri = p11_kit_uri_new();
 	if (!uri) {
 		return LIBSSIG_ERROR_MEMORY;
 	}
-	int rc = p11_kit_uri_parse(text, P11_KIT_URI_FOR_TOKEN, uri);
+	int uri_status = p11_kit_uri_parse(uri_text, P11_KIT_URI_FOR_TOKEN, uri);
 
 	libssig_status status = LIBSSIG_ERROR_URI;
-	if (rc != P11_KIT_URI_OK || p11_kit_uri_any_unrecognized(uri) ||
+	if (uri_status != P11_KIT_URI_OK || p11_kit_uri_any_unrecognized(uri) ||
 	    p11_kit_uri_get_pin_value(uri) || p11_kit_uri_get_pin_source(uri) ||
 	    p11_kit_uri_get_module_name(uri) || p11_kit_uri_get_module_path(uri)) {
 		p11_kit_uri_free(uri);
@@ -89,7 +89,7 @@ static libssig_status select_token(
 	}
 	status = LIBSSIG_OK;
 	for (size_t i = 0; ctx->modules[i]; ++i) {
-		status = find_in_module(ctx->modules[i], uri, s, out_rv);
+		status = module_token_find(ctx->modules[i], uri, s, out_rv);
 		if (status != LIBSSIG_OK) {
 			break;
 		}
@@ -101,18 +101,18 @@ static libssig_status select_token(
 	return s->module ? LIBSSIG_OK : LIBSSIG_ERROR_NOT_FOUND;
 }
 
-libssig_status pkcs11_session_open(
-    const pkcs11_context* ctx,
-    const char*           uri,
-    pkcs11_session*       s,
-    CK_RV*                out_rv
+libssig_status libssig_session_open(
+    const libssig_context* ctx,
+    const char*            uri,
+    libssig_session*       s,
+    CK_RV*                 out_rv
 ) {
 	if (!ctx || !ctx->modules || !uri || !s || !out_rv || s->open) {
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
 	*out_rv = CKR_OK;
-	pkcs11_session pending = {0};
-	libssig_status status = select_token(ctx, uri, &pending, out_rv);
+	libssig_session pending = {0};
+	libssig_status  status = token_select(ctx, uri, &pending, out_rv);
 	if (status != LIBSSIG_OK) {
 		return status;
 	}
@@ -131,8 +131,8 @@ libssig_status pkcs11_session_open(
 	return LIBSSIG_OK;
 }
 
-libssig_status pkcs11_session_login(
-    pkcs11_session*      s,
+libssig_status libssig_session_login(
+    libssig_session*     s,
     const unsigned char* pin,
     size_t               pin_len,
     CK_RV*               out_rv
@@ -146,15 +146,15 @@ libssig_status pkcs11_session_login(
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
 
-	CK_TOKEN_INFO info;
-	*out_rv = s->module->C_GetTokenInfo(s->slot, &info);
+	CK_TOKEN_INFO token_info;
+	*out_rv = s->module->C_GetTokenInfo(s->slot, &token_info);
 	if (*out_rv != CKR_OK) {
 		return LIBSSIG_ERROR_PKCS11;
 	}
-	if (!(info.flags & CKF_LOGIN_REQUIRED)) {
+	if (!(token_info.flags & CKF_LOGIN_REQUIRED)) {
 		return LIBSSIG_OK;
 	}
-	if (!pin && !(info.flags & CKF_PROTECTED_AUTHENTICATION_PATH)) {
+	if (!pin && !(token_info.flags & CKF_PROTECTED_AUTHENTICATION_PATH)) {
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
 
@@ -170,11 +170,11 @@ libssig_status pkcs11_session_login(
 	return LIBSSIG_ERROR_PKCS11;
 }
 
-CK_RV pkcs11_session_close(pkcs11_session* s) {
+CK_RV libssig_session_close(libssig_session* s) {
 	if (!s || !s->open) {
 		return CKR_OK;
 	}
 	CK_RV rv = s->module->C_CloseSession(s->handle);
-	*s = (pkcs11_session){0};
+	*s = (libssig_session){0};
 	return rv;
 }

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include <libssig/internal.h>
 
-libssig_status pkcs11_context_open(pkcs11_context* ctx) {
+libssig_status libssig_context_open(libssig_context* ctx) {
 	if (!ctx || ctx->modules) {
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
@@ -9,7 +9,7 @@ libssig_status pkcs11_context_open(pkcs11_context* ctx) {
 	return ctx->modules ? LIBSSIG_OK : LIBSSIG_ERROR_MODULES;
 }
 
-void pkcs11_context_close(pkcs11_context* ctx) {
+void libssig_context_close(libssig_context* ctx) {
 	if (!ctx || !ctx->modules) {
 		return;
 	}

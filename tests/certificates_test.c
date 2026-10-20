@@ -66,7 +66,7 @@ static CK_RV mock_attribute_get(
 	static const unsigned char id[] = {0, 0xff, 1};
 	static const unsigned char der[] = {0x30, 0x02, 0x05, 0};
 	const void*                value = id;
-	CK_ULONG                   length = sizeof(id);
+	CK_ULONG                   len = sizeof(id);
 	if (attribute_rv != CKR_OK) {
 		return attribute_rv;
 	}
@@ -76,20 +76,20 @@ static CK_RV mock_attribute_get(
 	}
 	if (attribute->type == CKA_LABEL) {
 		value = "test";
-		length = 4;
+		len = 4;
 	}
 	if (attribute->type == CKA_VALUE) {
 		value = der;
-		length = sizeof(der);
+		len = sizeof(der);
 	}
 	if (attribute->pValue && attribute_grows) {
-		attribute->ulValueLen = length + 1;
+		attribute->ulValueLen = len + 1;
 		return CKR_BUFFER_TOO_SMALL;
 	}
 	if (attribute->pValue) {
-		memcpy(attribute->pValue, value, length);
+		memcpy(attribute->pValue, value, len);
 	}
-	attribute->ulValueLen = length;
+	attribute->ulValueLen = len;
 	return CKR_OK;
 }
 

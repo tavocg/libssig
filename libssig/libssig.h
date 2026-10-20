@@ -104,13 +104,13 @@ typedef struct {
 	unsigned long  ck_rv;
 } libssig_tokens;
 
-void libssig_version(int* major, int* minor, int* patch);
+void libssig_version_get(int* out_major, int* out_minor, int* out_patch);
 
-libssig_status libssig_list_tokens(libssig_tokens* result, bool hardware_only);
+libssig_status libssig_tokens_list(libssig_tokens* tokens, bool hardware_only);
 
-void libssig_tokens_free(libssig_tokens* result);
+void libssig_tokens_free(libssig_tokens* tokens);
 
-libssig_status libssig_list_certificates(
+libssig_status libssig_certificates_list(
     const libssig_token*  token,
     libssig_certificates* certs
 );

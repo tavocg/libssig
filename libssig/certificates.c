@@ -23,23 +23,23 @@ void libssig_certificates_free(libssig_certificates* certs) {
 	certs->ck_rv = 0;
 }
 
-static bool attribute_unavailable(CK_RV rv) {
+static bool attribute_is_unavailable(CK_RV rv) {
 	return rv == CKR_ATTRIBUTE_SENSITIVE || rv == CKR_ATTRIBUTE_TYPE_INVALID;
 }
 
-static libssig_status read_attribute(
-    pkcs11_session*   s,
+static libssig_status attribute_read(
+    libssig_session*  s,
     CK_OBJECT_HANDLE  object,
     CK_ATTRIBUTE_TYPE type,
-    unsigned char**   data,
-    size_t*           length,
+    unsigned char**   out_data,
+    size_t*           out_len,
     CK_RV*            out_rv
 ) {
-	*data = NULL;
-	*length = 0;
+	*out_data = NULL;
+	*out_len = 0;
 	CK_ATTRIBUTE attribute = {type, NULL, 0};
 	*out_rv = s->module->C_GetAttributeValue(s->handle, object, &attribute, 1);
-	if (attribute_unavailable(*out_rv)) {
+	if (attribute_is_unavailable(*out_rv)) {
 		*out_rv = CKR_OK;
 		return LIBSSIG_OK;
 	}
@@ -59,7 +59,7 @@ static libssig_status read_attribute(
 	}
 	attribute.pValue = buffer;
 	*out_rv = s->module->C_GetAttributeValue(s->handle, object, &attribute, 1);
-	if (attribute_unavailable(*out_rv)) {
+	if (attribute_is_unavailable(*out_rv)) {
 		free(buffer);
 		*out_rv = CKR_OK;
 		return LIBSSIG_OK;
@@ -78,30 +78,30 @@ static libssig_status read_attribute(
 		return LIBSSIG_ERROR_PKCS11;
 	}
 	buffer[attribute.ulValueLen] = 0;
-	*data = buffer;
-	*length = (size_t)attribute.ulValueLen;
+	*out_data = buffer;
+	*out_len = (size_t)attribute.ulValueLen;
 	return LIBSSIG_OK;
 }
 
-static libssig_status read_certificate(
-    pkcs11_session*      s,
+static libssig_status certificate_read(
+    libssig_session*     s,
     CK_OBJECT_HANDLE     object,
     libssig_certificate* cert,
     CK_RV*               out_rv
 ) {
 	libssig_status status =
-	    read_attribute(s, object, CKA_ID, &cert->id, &cert->id_len, out_rv);
+	    attribute_read(s, object, CKA_ID, &cert->id, &cert->id_len, out_rv);
 	if (status != LIBSSIG_OK) {
 		return status;
 	}
 	unsigned char* label = NULL;
 	status =
-	    read_attribute(s, object, CKA_LABEL, &label, &cert->label_len, out_rv);
+	    attribute_read(s, object, CKA_LABEL, &label, &cert->label_len, out_rv);
 	cert->label = (char*)label;
 	if (status != LIBSSIG_OK) {
 		return status;
 	}
-	return read_attribute(
+	return attribute_read(
 	    s,
 	    object,
 	    CKA_VALUE,
@@ -111,14 +111,14 @@ static libssig_status read_certificate(
 	);
 }
 
-static libssig_status append_certificate(
-    pkcs11_session*       s,
+static libssig_status certificates_collect_one(
+    libssig_session*      s,
     CK_OBJECT_HANDLE      object,
     libssig_certificates* certs,
     CK_RV*                out_rv
 ) {
 	libssig_certificate cert = {0};
-	libssig_status      status = read_certificate(s, object, &cert, out_rv);
+	libssig_status      status = certificate_read(s, object, &cert, out_rv);
 	if (status != LIBSSIG_OK) {
 		certificate_free(&cert);
 		return status;
@@ -127,19 +127,19 @@ static libssig_status append_certificate(
 		certificate_free(&cert);
 		return LIBSSIG_ERROR_MEMORY;
 	}
-	libssig_certificate* entries =
-	    realloc(certs->items, (certs->count + 1) * sizeof(*entries));
-	if (!entries) {
+	libssig_certificate* items =
+	    realloc(certs->items, (certs->count + 1) * sizeof(*items));
+	if (!items) {
 		certificate_free(&cert);
 		return LIBSSIG_ERROR_MEMORY;
 	}
-	certs->items = entries;
+	certs->items = items;
 	certs->items[certs->count++] = cert;
 	return LIBSSIG_OK;
 }
 
-libssig_status pkcs11_collect_certificates(
-    pkcs11_session*       s,
+libssig_status libssig_certificates_collect(
+    libssig_session*      s,
     libssig_certificates* certs,
     CK_RV*                out_rv
 ) {
@@ -165,7 +165,7 @@ libssig_status pkcs11_collect_certificates(
 		if (!count) {
 			break;
 		}
-		status = append_certificate(s, object, certs, out_rv);
+		status = certificates_collect_one(s, object, certs, out_rv);
 		if (status != LIBSSIG_OK) {
 			break;
 		}
@@ -183,7 +183,7 @@ libssig_status pkcs11_collect_certificates(
 	return LIBSSIG_OK;
 }
 
-libssig_status libssig_list_certificates(
+libssig_status libssig_certificates_list(
     const libssig_token*  token,
     libssig_certificates* certs
 ) {
@@ -194,19 +194,19 @@ libssig_status libssig_list_certificates(
 	if (!token || !token->uri) {
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
-	pkcs11_context ctx = {0};
-	libssig_status status = pkcs11_context_open(&ctx);
+	libssig_context ctx = {0};
+	libssig_status  status = libssig_context_open(&ctx);
 	if (status != LIBSSIG_OK) {
 		return status;
 	}
-	pkcs11_session s = {0};
-	CK_RV          rv = CKR_OK;
-	status = pkcs11_session_open(&ctx, token->uri, &s, &rv);
+	libssig_session s = {0};
+	CK_RV           rv = CKR_OK;
+	status = libssig_session_open(&ctx, token->uri, &s, &rv);
 	if (status == LIBSSIG_OK) {
-		status = pkcs11_collect_certificates(&s, certs, &rv);
+		status = libssig_certificates_collect(&s, certs, &rv);
 	}
-	CK_RV close_rv = pkcs11_session_close(&s);
-	pkcs11_context_close(&ctx);
+	CK_RV close_rv = libssig_session_close(&s);
+	libssig_context_close(&ctx);
 	if (status == LIBSSIG_OK && close_rv != CKR_OK) {
 		rv = close_rv;
 		status = LIBSSIG_ERROR_PKCS11;

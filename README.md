@@ -9,10 +9,10 @@ A small C library for digital signing using PKCS#11 through `p11-kit`.
 
 ## Public interface
 
-- `libssig_version`
-- `libssig_list_tokens`
+- `libssig_version_get`
+- `libssig_tokens_list`
 - `libssig_tokens_free`
-- `libssig_list_certificates`
+- `libssig_certificates_list`
 - `libssig_certificates_free`
 
 ## Build

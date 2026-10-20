@@ -20,16 +20,16 @@
 
 #include <libssig/libssig.h>
 
-void libssig_version(int* major, int* minor, int* patch) {
-	if (major) {
-		*major = LIBSSIG_VERSION_MAJOR;
+void libssig_version_get(int* out_major, int* out_minor, int* out_patch) {
+	if (out_major) {
+		*out_major = LIBSSIG_VERSION_MAJOR;
 	}
 
-	if (minor) {
-		*minor = LIBSSIG_VERSION_MINOR;
+	if (out_minor) {
+		*out_minor = LIBSSIG_VERSION_MINOR;
 	}
 
-	if (patch) {
-		*patch = LIBSSIG_VERSION_PATCH;
+	if (out_patch) {
+		*out_patch = LIBSSIG_VERSION_PATCH;
 	}
 }

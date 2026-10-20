@@ -9,9 +9,9 @@
 #include <stdio.h>
 #include <string.h>
 
-static void json_text_print(const char* text, size_t length) {
+static void json_text_print(const char* text, size_t len) {
 	putchar('"');
-	for (size_t i = 0; i < length; ++i) {
+	for (size_t i = 0; i < len; ++i) {
 		const unsigned char* p = (const unsigned char*)text + i;
 		switch (*p) {
 		case '"':
@@ -92,13 +92,13 @@ static void value_print(const char* name, unsigned long value, bool limit) {
 	}
 }
 
-static void hex_print(const unsigned char* data, size_t length) {
+static void hex_print(const unsigned char* data, size_t len) {
 	if (!data) {
 		fputs("null", stdout);
 		return;
 	}
 	putchar('"');
-	for (size_t i = 0; i < length; ++i) {
+	for (size_t i = 0; i < len; ++i) {
 		printf("%02x", (unsigned)data[i]);
 	}
 	putchar('"');
