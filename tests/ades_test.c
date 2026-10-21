@@ -104,6 +104,68 @@ static libssig_status exchange(
 	ASN1_TIME_free(revoked);
 	return output->data ? LIBSSIG_OK : LIBSSIG_ERROR_CRYPTO;
 }
+static int lt_revoked_check(
+    const libssig_signature* output,
+    libssig_verify_params    verify
+) {
+	X509_CRL*     crl = X509_CRL_new();
+	X509_REVOKED* entry = X509_REVOKED_new();
+	ASN1_TIME*    current = X509_gmtime_adj(NULL, -60);
+	ASN1_TIME*    next = X509_gmtime_adj(NULL, 3600);
+	ASN1_TIME*    revoked = X509_gmtime_adj(NULL, -120);
+	CHECK(
+	    crl && entry && current && next && revoked &&
+	    X509_CRL_set_version(crl, 1) &&
+	    X509_CRL_set_issuer_name(crl, X509_get_subject_name(root)) &&
+	    X509_CRL_set1_lastUpdate(crl, current) &&
+	    X509_CRL_set1_nextUpdate(crl, next) &&
+	    X509_REVOKED_set_serialNumber(entry, X509_get_serialNumber(tsa)) &&
+	    X509_REVOKED_set_revocationDate(entry, revoked) &&
+	    X509_CRL_add0_revoked(crl, entry) && X509_CRL_sort(crl) &&
+	    X509_CRL_sign(crl, root_key, EVP_sha256())
+	);
+	unsigned char*       bytes = NULL;
+	int                  len = i2d_X509_CRL(crl, &bytes);
+	const unsigned char* cursor = bytes;
+	ASN1_TYPE* value = len > 0 ? d2i_ASN1_TYPE(NULL, &cursor, len) : NULL;
+	libssig_validation_data validation = {
+	    .certs = sk_X509_new_null(),
+	    .revocations = sk_ASN1_TYPE_new_null()
+	};
+	CHECK(
+	    value && validation.certs && validation.revocations &&
+	    sk_ASN1_TYPE_push(validation.revocations, value)
+	);
+	cursor = output->data;
+	CMS_ContentInfo* cms = d2i_CMS_ContentInfo(
+	    NULL,
+	    &cursor,
+	    (long)output->len
+	);
+	CHECK(cms && libssig_validation_embed(&cms, &validation) == LIBSSIG_OK);
+	libssig_signature encoded = {0};
+	CHECK(libssig_ades_encode(cms, &encoded) == LIBSSIG_OK);
+	verify.data = encoded.data;
+	verify.data_len = encoded.len;
+	libssig_verify_result result = {0};
+	CHECK(libssig_verify(&verify, &result) == LIBSSIG_ERROR_REVOKED);
+	CHECK(
+	    result.signature_valid &&
+	    result.signers[0].level == LIBSSIG_LEVEL_B_LT &&
+	    !result.signers[0].level_validated
+	);
+	libssig_verify_free(&result);
+	libssig_signature_free(&encoded);
+	libssig_validation_free(&validation);
+	CMS_ContentInfo_free(cms);
+	OPENSSL_free(bytes);
+	ASN1_TIME_free(current);
+	ASN1_TIME_free(next);
+	ASN1_TIME_free(revoked);
+	X509_CRL_free(crl);
+	return 0;
+}
+
 int main(int argc, char** argv) {
 	CHECK(argc == 2);
 	directory = argv[1];
@@ -176,6 +238,12 @@ int main(int argc, char** argv) {
 			);
 		}
 		CHECK(status == LIBSSIG_OK && result.signature_valid && result.trusted);
+		CHECK(result.format == LIBSSIG_FORMAT_CADES);
+		CHECK(
+		    result.signers[0].level_detected &&
+		    result.signers[0].level == levels[i] &&
+		    result.signers[0].level_validated
+		);
 		CHECK(result.signers[0].timestamp.present == (i > 0));
 		CHECK(result.signers[0].archive.present == (i == 3));
 		if (i == 3) {
@@ -185,6 +253,18 @@ int main(int argc, char** argv) {
 			);
 		}
 		libssig_verify_free(&result);
+		if (i == 2) {
+			CHECK(lt_revoked_check(&output, verify) == 0);
+		}
+		verify.options |= LIBSSIG_VERIFY_HISTORICAL;
+		status = libssig_verify(&verify, &result);
+		CHECK(status == (i == 3 ? LIBSSIG_OK : LIBSSIG_ERROR_EVIDENCE));
+		CHECK(
+		    result.signers[0].history ==
+		    (i == 3 ? LIBSSIG_HISTORY_VALID : LIBSSIG_HISTORY_INCOMPLETE)
+		);
+		libssig_verify_free(&result);
+		verify.options &= ~LIBSSIG_VERIFY_HISTORICAL;
 		if (i == 3) {
 			const unsigned char* cursor = output.data;
 			libssig_raw_cms*     raw = d2i_libssig_raw_cms(
@@ -193,6 +273,32 @@ int main(int argc, char** argv) {
                 (long)output.len
             );
 			CHECK(raw && sk_ASN1_TYPE_num(raw->signed_data->revocations) > 0);
+			ASN1_TYPE* source = sk_ASN1_TYPE_value(
+			    raw->signed_data->revocations,
+			    0
+			);
+			ASN1_TYPE* added = ASN1_TYPE_new();
+			CHECK(
+			    added &&
+			    ASN1_TYPE_set1(added, source->type, source->value.ptr) &&
+			    sk_ASN1_TYPE_push(raw->signed_data->revocations, added)
+			);
+			unsigned char* unprotected = NULL;
+			int            extra_len = i2d_libssig_raw_cms(raw, &unprotected);
+			CHECK(extra_len > 0);
+			verify.data = unprotected;
+			verify.data_len = (size_t)extra_len;
+			verify.options |= LIBSSIG_VERIFY_HISTORICAL;
+			CHECK(libssig_verify(&verify, &result) == LIBSSIG_ERROR_TIMESTAMP);
+			CHECK(
+			    result.signature_valid &&
+			    result.signers[0].history == LIBSSIG_HISTORY_INCOMPLETE
+			);
+			libssig_verify_free(&result);
+			OPENSSL_free(unprotected);
+			ASN1_TYPE_free(sk_ASN1_TYPE_pop(raw->signed_data->revocations));
+			verify.options &= ~LIBSSIG_VERIFY_HISTORICAL;
+
 			ASN1_TYPE_free(sk_ASN1_TYPE_pop(raw->signed_data->revocations));
 			unsigned char* tampered = NULL;
 			int            len = i2d_libssig_raw_cms(raw, &tampered);
@@ -241,8 +347,71 @@ int main(int argc, char** argv) {
 			);
 		}
 		CHECK(status == LIBSSIG_OK && result.signature_valid && result.trusted);
+		CHECK(result.format == LIBSSIG_FORMAT_PADES);
+		CHECK(
+		    result.signers[0].level_detected &&
+		    result.signers[0].level == levels[i] &&
+		    result.signers[0].level_validated
+		);
 		CHECK(result.signers[0].timestamp.present == (i > 0));
 		CHECK(result.signers[0].archive.present == (i == 3));
+		libssig_verify_free(&result);
+		verify.options |= LIBSSIG_VERIFY_HISTORICAL;
+		status = libssig_verify(&verify, &result);
+		if (status != (i == 3 ? LIBSSIG_OK : LIBSSIG_ERROR_EVIDENCE)) {
+			fprintf(stderr, "PDF historical level %zu: %d\n", i, status);
+		}
+		CHECK(status == (i == 3 ? LIBSSIG_OK : LIBSSIG_ERROR_EVIDENCE));
+		CHECK(
+		    result.signers[0].history ==
+		    (i == 3 ? LIBSSIG_HISTORY_VALID : LIBSSIG_HISTORY_INCOMPLETE)
+		);
+		if (i == 3) {
+			libssig_verify_free(&result);
+			libssig_signature current_crl = {0};
+			CHECK(
+			    exchange(
+			        NULL,
+			        LIBSSIG_FETCH_CRL,
+			        "http://test/crl",
+			        NULL,
+			        0,
+			        &current_crl
+			    ) == LIBSSIG_OK
+			);
+			libssig_revocation_evidence evidence = {
+			    .data = current_crl.data,
+			    .len = current_crl.len
+			};
+			verify.current_revocations = &evidence;
+			verify.current_revocation_count = 1;
+			CHECK(libssig_verify(&verify, &result) == LIBSSIG_OK);
+			libssig_verify_free(&result);
+			static const unsigned char malformed[] = {0x30, 0};
+			evidence.data = malformed;
+			evidence.len = sizeof(malformed);
+			CHECK(libssig_verify(&verify, &result) == LIBSSIG_ERROR_EVIDENCE);
+			CHECK(result.signature_valid);
+			libssig_verify_free(&result);
+			libssig_signature_free(&current_crl);
+			verify.current_revocations = NULL;
+			verify.current_revocation_count = 0;
+			static const char suffix[] = "\n% unsigned revision\n";
+			unsigned char*    unsigned_revision = malloc(
+                output.len + sizeof(suffix) - 1
+            );
+			CHECK(unsigned_revision);
+			memcpy(unsigned_revision, output.data, output.len);
+			memcpy(unsigned_revision + output.len, suffix, sizeof(suffix) - 1);
+			verify.data = unsigned_revision;
+			verify.data_len = output.len + sizeof(suffix) - 1;
+			CHECK(libssig_verify(&verify, &result) == LIBSSIG_ERROR_EVIDENCE);
+			CHECK(
+			    result.signature_valid &&
+			    result.signers[0].history == LIBSSIG_HISTORY_INCOMPLETE
+			);
+			free(unsigned_revision);
+		}
 		char name[64];
 		snprintf(name, sizeof(name), "pades-level-%zu.pdf", i);
 		CHECK(file_write(name, output.data, output.len) == 0);

@@ -254,6 +254,58 @@ static libssig_status signatures_check(
 	return status;
 }
 
+static libssig_status historical_run(
+    CMS_ContentInfo*             cms,
+    const libssig_verify_params* params,
+    libssig_verify_result*       result,
+    libssig_raw_cms*             raw
+) {
+	libssig_status status = libssig_verify_timestamps(cms, params, result);
+	if (status == LIBSSIG_OK) {
+		status = libssig_verify_archives(cms, params, result);
+	}
+	if (status == LIBSSIG_OK) {
+		status = libssig_history_verify(
+		    cms,
+		    params,
+		    raw->signed_data->revocations,
+		    NULL,
+		    result
+		);
+	} else {
+		for (size_t i = 0; i < result->count; ++i) {
+			result->signers[i].history = status == LIBSSIG_ERROR_TRUST
+			                                 ? LIBSSIG_HISTORY_UNTRUSTED
+			                                 : LIBSSIG_HISTORY_INCOMPLETE;
+		}
+	}
+	return status;
+}
+
+static bool level_present(
+    const libssig_verify_result* result,
+    libssig_level                level
+) {
+	for (size_t i = 0; i < result->count; ++i) {
+		if (result->signers[i].level == level &&
+		    (result->signers[i].level_detected ||
+		     level == LIBSSIG_LEVEL_B_LTA)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static libssig_raw_cms* raw_parse(CMS_ContentInfo* cms) {
+	unsigned char*       data = NULL;
+	int                  len = i2d_CMS_ContentInfo(cms, &data);
+	const unsigned char* cursor = data;
+	libssig_raw_cms*     raw = len > 0 ? d2i_libssig_raw_cms(NULL, &cursor, len)
+	                                   : NULL;
+	OPENSSL_free(data);
+	return raw;
+}
+
 static libssig_status verification_run(
     CMS_ContentInfo*             cms,
     const libssig_verify_params* params,
@@ -283,6 +335,36 @@ static libssig_status verification_run(
 		status = signatures_check(cms, params, certs, result);
 	}
 
+	libssig_raw_cms* raw = status == LIBSSIG_OK ? raw_parse(cms) : NULL;
+	if (status == LIBSSIG_OK && !raw) {
+		status = LIBSSIG_ERROR_CRYPTO;
+	}
+	if (status == LIBSSIG_OK) {
+		libssig_verify_profiles_detect(
+		    cms,
+		    false,
+		    sk_ASN1_TYPE_num(raw->signed_data->revocations) > 0,
+		    result
+		);
+	}
+	bool automatic = !(params->options & LIBSSIG_VERIFY_CURRENT_TIME);
+	bool historical = (params->options & LIBSSIG_VERIFY_HISTORICAL) ||
+	                  (automatic && level_present(result, LIBSSIG_LEVEL_B_LTA));
+	if (status == LIBSSIG_OK && historical) {
+		libssig_verify_params selected = *params;
+		selected.options |= LIBSSIG_VERIFY_HISTORICAL;
+		status = selected.ocsp_count ||
+		                 (selected.options & (LIBSSIG_VERIFY_REQUIRE_OCSP |
+		                                      LIBSSIG_VERIFY_REQUIRE_TSA_OCSP))
+		             ? LIBSSIG_ERROR_ARGUMENT
+		             : historical_run(cms, &selected, result, raw);
+		libssig_raw_cms_free(raw);
+		sk_X509_pop_free(embedded, X509_free);
+		sk_X509_pop_free(certs, X509_free);
+		sk_X509_pop_free(roots, X509_free);
+		return status;
+	}
+
 	if (status == LIBSSIG_OK &&
 	    (params->ca_data || (params->options & LIBSSIG_VERIFY_SYSTEM_TRUST))) {
 		status = libssig_verify_trust_check(cms, params, roots, certs, result);
@@ -307,6 +389,18 @@ static libssig_status verification_run(
 			status = archive;
 		}
 	}
+	if (status == LIBSSIG_OK && automatic &&
+	    level_present(result, LIBSSIG_LEVEL_B_LT)) {
+		status = libssig_validation_verify(
+		    cms,
+		    params,
+		    raw->signed_data->revocations,
+		    NULL,
+		    false,
+		    result
+		);
+	}
+	libssig_raw_cms_free(raw);
 	sk_X509_pop_free(embedded, X509_free);
 	sk_X509_pop_free(certs, X509_free);
 	sk_X509_pop_free(roots, X509_free);
@@ -315,6 +409,23 @@ static libssig_status verification_run(
 
 static bool bundle_valid(const unsigned char* data, size_t len) {
 	return len <= INT_MAX && ((data && len) || (!data && !len));
+}
+
+static bool current_evidence_valid(const libssig_verify_params* params) {
+	if (params->current_revocation_count > 1024 ||
+	    (!params->current_revocations && params->current_revocation_count) ||
+	    (params->current_revocation_count &&
+	     (params->options & LIBSSIG_VERIFY_CURRENT_TIME))) {
+		return false;
+	}
+	for (size_t i = 0; i < params->current_revocation_count; ++i) {
+		const libssig_revocation_evidence* item = &params
+		                                               ->current_revocations[i];
+		if (!item->data || !item->len || item->len > 16 * 1024 * 1024) {
+			return false;
+		}
+	}
+	return true;
 }
 
 libssig_status libssig_verify(
@@ -326,14 +437,16 @@ libssig_status libssig_verify(
 	}
 
 	*result = (libssig_verify_result){0};
-	if (!params || !libssig_verify_ocsp_params_valid(params) || !params->data ||
+	if (!params || !current_evidence_valid(params) ||
+	    !libssig_verify_ocsp_params_valid(params) || !params->data ||
 	    !params->data_len || params->data_len > LONG_MAX ||
 	    params->content_len > INT_MAX ||
 	    (!params->content && params->content_len) ||
 	    (params->options &
 	     ~(LIBSSIG_VERIFY_SYSTEM_TRUST | LIBSSIG_VERIFY_TSA_SYSTEM_TRUST |
 	       LIBSSIG_VERIFY_REQUIRE_TIMESTAMP | LIBSSIG_VERIFY_REQUIRE_OCSP |
-	       LIBSSIG_VERIFY_REQUIRE_TSA_OCSP)) ||
+	       LIBSSIG_VERIFY_REQUIRE_TSA_OCSP | LIBSSIG_VERIFY_HISTORICAL |
+	       LIBSSIG_VERIFY_CURRENT_TIME)) ||
 	    !bundle_valid(params->ca_data, params->ca_data_len) ||
 	    !bundle_valid(
 	        params->intermediates_data,
@@ -351,11 +464,29 @@ libssig_status libssig_verify(
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
 
+	if ((params->options & LIBSSIG_VERIFY_HISTORICAL) &&
+	    (params->options & LIBSSIG_VERIFY_CURRENT_TIME)) {
+		return LIBSSIG_ERROR_ARGUMENT;
+	}
+
+	if ((params->options & LIBSSIG_VERIFY_HISTORICAL) &&
+	    ((!params->ca_data &&
+	      !(params->options & LIBSSIG_VERIFY_SYSTEM_TRUST)) ||
+	     (!params->tsa_ca_data &&
+	      !(params->options & LIBSSIG_VERIFY_TSA_SYSTEM_TRUST)) ||
+	     params->ocsp_count ||
+	     (params->options &
+	      (LIBSSIG_VERIFY_REQUIRE_OCSP | LIBSSIG_VERIFY_REQUIRE_TSA_OCSP)))) {
+		return LIBSSIG_ERROR_ARGUMENT;
+	}
+
 	if (params->data_len >= 5 && !memcmp(params->data, "%PDF-", 5)) {
 		libssig_status status = libssig_pades_verify(params, result);
+		libssig_verify_profiles_finish(status, result);
 		if (status != LIBSSIG_OK && status != LIBSSIG_ERROR_TRUST &&
 		    status != LIBSSIG_ERROR_TIMESTAMP && status != LIBSSIG_ERROR_OCSP &&
-		    status != LIBSSIG_ERROR_REVOKED) {
+		    status != LIBSSIG_ERROR_REVOKED &&
+		    status != LIBSSIG_ERROR_EVIDENCE) {
 			libssig_verify_free(result);
 		}
 		return status;
@@ -376,9 +507,10 @@ libssig_status libssig_verify(
 	                            ? verification_run(cms, params, result)
 	                            : LIBSSIG_ERROR_UNSUPPORTED;
 	CMS_ContentInfo_free(cms);
+	libssig_verify_profiles_finish(status, result);
 	if (status != LIBSSIG_OK && status != LIBSSIG_ERROR_TRUST &&
 	    status != LIBSSIG_ERROR_TIMESTAMP && status != LIBSSIG_ERROR_OCSP &&
-	    status != LIBSSIG_ERROR_REVOKED) {
+	    status != LIBSSIG_ERROR_REVOKED && status != LIBSSIG_ERROR_EVIDENCE) {
 		libssig_verify_free(result);
 	}
 	return status;

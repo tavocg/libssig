@@ -198,3 +198,8 @@ add_test(NAME ades COMMAND ${CMAKE_COMMAND}
     "-DADES_TEST=$<TARGET_FILE:ades_test>"
     "-DFIXTURES=${CMAKE_CURRENT_BINARY_DIR}/ades-fixtures"
     -P ${CMAKE_CURRENT_SOURCE_DIR}/ades_verify.cmake)
+
+add_executable(history_test history_test.c)
+target_link_libraries(history_test PRIVATE libssig::ssig OpenSSL::Crypto)
+target_compile_options(history_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME history COMMAND history_test)

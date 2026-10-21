@@ -40,6 +40,7 @@ typedef enum {
 	LIBSSIG_ERROR_TIMESTAMP,
 	LIBSSIG_ERROR_OCSP,
 	LIBSSIG_ERROR_REVOKED,
+	LIBSSIG_ERROR_EVIDENCE,
 } libssig_status;
 
 /* Inicializar con {0}. No copiar ni modificar impl.
@@ -401,7 +402,16 @@ typedef enum {
 	LIBSSIG_VERIFY_REQUIRE_TIMESTAMP = 1u << 2,
 	LIBSSIG_VERIFY_REQUIRE_OCSP = 1u << 3,
 	LIBSSIG_VERIFY_REQUIRE_TSA_OCSP = 1u << 4,
+	LIBSSIG_VERIFY_HISTORICAL = 1u << 5,
+	LIBSSIG_VERIFY_CURRENT_TIME = 1u << 6,
 } libssig_verify_options;
+
+/* Respuesta OCSP completa o CRL, DER. Prestada durante verify; no es una raíz.
+ */
+typedef struct {
+	const unsigned char* data;
+	size_t               len;
+} libssig_revocation_evidence;
 
 /* Punteros prestados durante la llamada; data contiene CMS/CAdES DER.
  * content = NULL, content_len = 0 indica contenido externo ausente.
@@ -431,8 +441,12 @@ typedef struct {
 	size_t                       tsa_intermediates_data_len;
 	const libssig_ocsp_evidence* ocsp;
 
-	size_t       ocsp_count;
-	unsigned int options;
+	size_t ocsp_count;
+	/* Evidencia actual para la cadena del último sello de
+	 * archivo. No sustituye las evidencias históricas protegidas por él. */
+	const libssig_revocation_evidence* current_revocations;
+	size_t                             current_revocation_count;
+	unsigned int                       options;
 } libssig_verify_params;
 
 /* Resultado del sello del firmante; valid comprueba firma, ESS, propósito TSA
@@ -454,6 +468,14 @@ typedef struct {
 	libssig_ocsp_result ocsp;
 } libssig_verify_timestamp;
 
+typedef enum {
+	LIBSSIG_HISTORY_NOT_CHECKED = 0,
+	LIBSSIG_HISTORY_VALID,
+	LIBSSIG_HISTORY_INCOMPLETE,
+	LIBSSIG_HISTORY_REVOKED,
+	LIBSSIG_HISTORY_UNTRUSTED,
+} libssig_history_status;
+
 /* Datos del firmante copiados; propiedad del resultado. */
 typedef struct {
 	unsigned char* cert_der;
@@ -463,6 +485,16 @@ typedef struct {
 	libssig_verify_timestamp timestamp;
 	libssig_verify_timestamp archive;
 	libssig_ocsp_result      ocsp;
+	libssig_history_status   history;
+	/* Nivel detectado por evidencias; solo es válido si level_detected.
+	 * level_validated requiere completar la política correspondiente y
+	 * confianza. */
+	libssig_level level;
+	bool          level_detected;
+	bool          level_validated;
+	/* Instante acreditado por el sello de firma, UTC ISO 8601. */
+	char validation_time[21];
+	bool revocation_checked;
 } libssig_verify_signer;
 
 typedef struct {
@@ -470,12 +502,14 @@ typedef struct {
 	size_t                 count;
 	bool                   detached;
 	bool                   signature_valid;
+	libssig_format         format;
 	bool                   trust_checked;
 	bool                   trusted;
 } libssig_verify_result;
 
 /* Sin contexto PKCS#11, token ni PIN. Verifica todos los firmantes.
- * Sin ca_data ni SYSTEM_TRUST verifica firma, contenido y vínculos ESS.
+ * Sin ca_data ni SYSTEM_TRUST B-B/B-T permiten comprobar firma/contenido/ESS;
+ * LT/LTA requieren confianza para completar sus políticas automáticas.
  * ca_data exige una cadena vigente hasta las raíces proporcionadas.
  * SYSTEM_TRUST suma las raíces del almacén predeterminado de OpenSSL
  * (incluye SSL_CERT_FILE/SSL_CERT_DIR) a ca_data, si está presente.
@@ -486,8 +520,18 @@ typedef struct {
  * Verifica sellos presentes sin requerir la solicitud original.
  * TSA_SYSTEM_TRUST suma raíces del sistema solo para TSA. REQUIRE_TIMESTAMP
  * exige un sello válido en cada firmante. tsa_ca_data activa confianza TSA.
- * El sello se verifica a la hora actual, sin validación histórica.
- * time es una fecha autenticada solo si la TSA es confiable.
+ * HISTORICAL exige confianza documental y TSA, sello de firma y de archivo,
+ * y evidencia protegida para todas las cadenas (excepto raíces confiables).
+ * La cadena documental y del sello de firma se evalúan en su fecha acreditada;
+ * el último sello de archivo requiere una cadena y revocación vigentes hoy.
+ * ERROR_EVIDENCE conserva resultados e indica evidencia ausente/no utilizable.
+ * Por defecto detecta evidencias y selecciona la política: B-B/B-T vigente,
+ * B-LT con revocación incluida vigente y B-LTA histórica. No omite fallos para
+ * informar un nivel inferior. level_detected no certifica conformidad ETSI.
+ * CURRENT_TIME desactiva esta selección y conserva comprobaciones actuales
+ * de firma/confianza/sellos y OCSP explícito; no acredita niveles LT/LTA.
+ * HISTORICAL exige B-LTA incluso si no se detecta; incompatible con
+ * CURRENT_TIME. time es una fecha autenticada solo si la TSA es confiable.
  * ERROR_TIMESTAMP conserva la firma válida e informa sellos inválidos/ausentes.
  * ERROR_TRUST conserva firma válida, firmantes y errores de confianza.
  * REQUIRE_OCSP exige GOOD para cada firmante; REQUIRE_TSA_OCSP exige un

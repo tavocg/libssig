@@ -1,4 +1,4 @@
-# CAdES and PAdES baseline generation
+# CAdES and PAdES baseline profiles
 
 `libssig_sign_params.level` selects B-B, B-T, B-LT or B-LTA. Zero means B-LTA.
 `format` selects CAdES (default), PAdES, or basic CMS (B-B only).
@@ -77,17 +77,110 @@ exceeding that capacity fails explicitly.
 
 `libssig_verify()` recognizes PDF input and checks CMS signatures, signature
 timestamps and archive/document timestamps, including archive hash indexes.
-Trust is checked at the current time. It does not yet implement a complete
-ETSI historical/past-validation policy, automatically consume embedded status
-information as a revocation policy, classify arbitrary external signatures by
-baseline level, or schedule preservation/renewal. An archive seal protects
-embedded evidence; checking that seal alone does not replace historical
-validation of that evidence. Existing explicit OCSP verification remains
-available. Installation of a root is independent of the embedded certificates.
+Verification automatically detects CMS/CAdES/PAdES and the available evidence.
+Each signer reports `level_detected`, `level` and `level_validated` separately:
+
+| Detected evidence | Default validation |
+| --- | --- |
+| B-B signed attributes | Document chain at the current time |
+| B-T signature timestamp | Current document and timestamp trust |
+| B-LT timestamp and revocation data | Current chains plus included OCSP/CRL for every non-anchor |
+| B-LTA archive/document timestamp | Bounded offline historical policy, with current trust for the last archive |
+
+Detection reports the supported evidence combination, not an authoritative
+level embedded in the signature. Containers do not have a single signed
+baseline-level field. Removing all unsigned evidence can make a formerly
+stronger signature indistinguishable from a lower level; use
+`LIBSSIG_VERIFY_HISTORICAL` to require LTA when that is the application's policy.
+Invalid detected higher-level evidence is never retried as a lower-level
+success. Missing embedded revocation status produces an incomplete result,
+not a validated LT/LTA label. Unclassified CMS returns no detected baseline.
+`result.format` is meaningful when signers are present.
+
+`LIBSSIG_VERIFY_CURRENT_TIME` explicitly disables automatic profile policies
+for diagnostics and checks signatures, current trust, timestamps and explicit
+OCSP. It does not validate LT/LTA levels. It is incompatible with HISTORICAL.
+
+This is not a complete implementation of the ETSI EN 319 102-1 validation-time-sliding algorithm or a
+classification of arbitrary external signatures by baseline level.
+
+## Historical validation
+
+```c
+libssig_verify_params params = {
+    .data = signed_data,
+    .data_len = signed_len,
+    .options = LIBSSIG_VERIFY_SYSTEM_TRUST |
+               LIBSSIG_VERIFY_TSA_SYSTEM_TRUST,
+};
+libssig_verify_result result = {0};
+libssig_status status = libssig_verify(&params, &result);
+/* Inspect signature_valid, trusted and each signer's history separately. */
+libssig_verify_free(&result);
+```
+
+Both document and TSA trust must be explicitly configured (custom roots or the
+system store). No embedded certificate becomes a trust anchor. The policy:
+
+- Validates the signature timestamp's chain at its authenticated generation
+  time and uses that time for the document chain. A signed `signingTime`
+  attribute is never a substitute for a trusted TSA.
+- Requires a valid archive timestamp, with an exact archive hash index for
+  CAdES, or a final PDF document timestamp covering the DSS and document
+  signature. Evidence added after that proof is not used historically.
+- Requires authenticated OCSP or a complete direct CRL for every non-anchor
+  certificate in the document and signature-TSA chains. Embedded certificates
+  in the timestamp are protected with the entire timestamp attribute. External
+  intermediates alone are not proof of historical existence.
+- Checks OCSP CertID, response signatures, responder authorization and validity
+  at issuance, and CRL issuer/signature/key usage. Status evidence must cover
+  the archive time (`thisUpdate <= archive <= nextUpdate`); OCSP `producedAt`
+  must precede the archive. A missing `nextUpdate` is insufficient under this
+  policy. Status issued after the signing time can establish historical status.
+- Rejects revocation at/before the signing proof. A later administrative
+  revocation can still establish validity at that proof. Key/CA compromise is
+  conservatively rejected even when the reported revocation time is later;
+  CRL invalidity dates can move the effective revocation earlier.
+- Bootstraps the last archive with TSA trust and revocation at the current
+  time, also checking its chain at generation. Expired or revoked archive-TSA
+  certificates are not rescued by their own claimed timestamp.
+
+`libssig_verify_signer.history` distinguishes valid, incomplete, revoked and
+untrusted outcomes. `validation_time` reports the authenticated signing proof;
+`revocation_checked` indicates a completed non-revocation decision or an
+authenticated revocation finding. `LIBSSIG_ERROR_EVIDENCE` preserves the
+cryptographic signature result and indicates missing or unusable evidence.
+`trusted` still describes document chain trust, not a successful historical
+revocation decision.
+
+When archived status for the latest archive TSA is no longer current, supply
+fresh DER OCSP responses or CRLs using `current_revocations` and
+`current_revocation_count` (an array of `libssig_revocation_evidence`). These
+are authenticated and used only for the current archive-TSA chain. They never
+repair missing historical proofs. Automatic LTA verification accepts them without
+requiring a HISTORICAL flag. The library performs no HTTP requests.
+Current evidence is limited to 1024 objects, 16 MiB each. Historical certificate
+and revocation collections are also limited to 1024 objects.
+
+Selected historical verification does not mix with explicit request-bound `ocsp` inputs or
+`REQUIRE_OCSP`/`REQUIRE_TSA_OCSP`; those retain their existing current-time
+semantics. CAdES mixing archived and non-archived signers currently requires archive
+evidence for every signer; otherwise it reports incomplete validation.
+Historical PDF support currently requires one document signature
+followed by one final document timestamp with no later unsigned revision.
+The historical result authenticates the original signed PDF revision; it does
+not perform a semantic document-diff analysis or determine whether subsequent
+visual/content changes were authorized by that signer.
+Archive renewal, multiple preservation generations, algorithm sunset policies,
+advanced CRLs and recursive OCSP responder revocation remain unsupported;
+insufficient supported evidence fails rather than implying full ETSI validity.
+Installation of a root is independent of embedded certificates.
 
 ## Tests
 
-The `ades` test generates all four levels with a local TSA/OCSP responder and
+The `history` test verifies an expired document signer and expired signature
+TSA, revocation before/after the signing proof, compromise, missing/stale
+evidence, and fresh current evidence for an older archive. The `ades` test generates all four levels with a local TSA/OCSP responder and
 checks failure on revoked certificates, archive-service errors and modified
 archive-protected evidence. PAdES B-B signing also exercises all nine existing
 algorithm/hash combinations through the PKCS#11 mock.

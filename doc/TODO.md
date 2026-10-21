@@ -118,3 +118,9 @@ Los niveles de generación B-B, B-T, B-LT y B-LTA están implementados para
 CAdES y PAdES; LTA es el valor por defecto. Los servicios de red los aporta
 la aplicación mediante `libssig_sign_services`. Sign selecciona el nivel con
 `-l` y el formato con `-f`; ver [profiles.md](profiles.md) para límites actuales.
+
+`libssig_verify` detecta las evidencias y selecciona la política por defecto;
+B-LTA usa validación histórica acotada. `LIBSSIG_VERIFY_HISTORICAL` permite
+exigirla incluso cuando faltan evidencias de archivo. La renovación de sellos y la
+política ETSI completa de validación temporal siguen pendientes; los límites
+y la entrada de revocación actual están descritos en [profiles.md](profiles.md).

@@ -8,6 +8,7 @@ typedef struct {
 	STACK_OF(X509) * certs;
 	X509_STORE*    store;
 	bool           requested;
+	bool           historical;
 	libssig_status store_status;
 } timestamp_trust;
 
@@ -38,6 +39,7 @@ static libssig_status trust_load(
 		status = libssig_verify_certs_append(trust->certs, roots);
 	}
 
+	trust->historical = params->options & LIBSSIG_VERIFY_HISTORICAL;
 	trust->requested = params->tsa_ca_data ||
 	                   (params->options & LIBSSIG_VERIFY_TSA_SYSTEM_TRUST);
 	if (status == LIBSSIG_OK && trust->requested) {
@@ -266,9 +268,29 @@ static libssig_status trust_check(
 	}
 
 	if (status == LIBSSIG_OK) {
+		if (trust->historical) {
+			time_t at;
+			if (!libssig_verify_time_parse(result->time, &at)) {
+				X509_STORE_CTX_free(ctx);
+				sk_X509_pop_free(certs, X509_free);
+				return LIBSSIG_ERROR_TIMESTAMP;
+			}
+			X509_STORE_CTX_set_time(ctx, 0, at);
+		}
 		result->trust_checked = true;
 		int ok = X509_verify_cert(ctx);
 		result->trust_error = X509_STORE_CTX_get_error(ctx);
+		time_t generated;
+		if (ok == 1 && libssig_verify_time_parse(result->time, &generated)) {
+			if (X509_cmp_time(X509_get0_notBefore(cert), &generated) > 0) {
+				ok = 0;
+				result->trust_error = X509_V_ERR_CERT_NOT_YET_VALID;
+			} else if (X509_cmp_time(X509_get0_notAfter(cert), &generated) <
+			           0) {
+				ok = 0;
+				result->trust_error = X509_V_ERR_CERT_HAS_EXPIRED;
+			}
+		}
 		result->trusted = ok == 1;
 		status = ok == 1 ? LIBSSIG_OK : LIBSSIG_ERROR_TRUST;
 	}

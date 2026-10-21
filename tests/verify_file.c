@@ -50,6 +50,8 @@ static const char* status_text(libssig_status status) {
 		       "firmantes o TSA.";
 	case LIBSSIG_ERROR_REVOKED:
 		return "Un certificado está revocado.";
+	case LIBSSIG_ERROR_EVIDENCE:
+		return "Evidencia histórica ausente, incompleta o no utilizable.";
 	case LIBSSIG_ERROR_OCSP:
 		return "OCSP no pudo establecer un estado no revocado.";
 	case LIBSSIG_ERROR_TIMESTAMP:
@@ -126,8 +128,30 @@ static void result_print(const libssig_verify_result* result) {
 		if (result->signers[i].mime_type) {
 			printf("MIME: %s\n", result->signers[i].mime_type);
 		}
+		if (result->signers[i].level_detected) {
+			const char* levels[] = {"B-LTA", "B-B", "B-T", "B-LT"};
+			printf(
+			    "Nivel: %s (%s).\n",
+			    levels[result->signers[i].level],
+			    result->signers[i].level_validated ? "validado" : "no validado"
+			);
+		}
 		ocsp_print("firmante", &result->signers[i].ocsp);
 		timestamp_print(&result->signers[i].timestamp);
+		if (result->signers[i].history != LIBSSIG_HISTORY_NOT_CHECKED) {
+			const char* states[] = {
+			    "no comprobada",
+			    "válida",
+			    "incompleta",
+			    "revocado",
+			    "sin confianza"
+			};
+			printf(
+			    "Validación histórica: %s; fecha: %s.\n",
+			    states[result->signers[i].history],
+			    result->signers[i].validation_time
+			);
+		}
 	}
 }
 
@@ -136,6 +160,7 @@ static void usage_print(const char* program, FILE* output) {
 	    output,
 	    "Uso: %s [--system-trust] [--ca-file RAICES.pem] "
 	    "[--intermediates INTERMEDIARIOS.pem] [--require-timestamp] "
+	    "[--historical] "
 	    "[--tsa-system-trust] [--tsa-ca-file RAICES.pem] "
 	    "[--tsa-intermediates INTERMEDIARIOS.pem] FIRMA [CONTENIDO_ORIGINAL]\n",
 	    program
@@ -143,6 +168,10 @@ static void usage_print(const char* program, FILE* output) {
 }
 
 static unsigned int option_flag(const char* arg) {
+	if (!strcmp(arg, "--historical")) {
+		return LIBSSIG_VERIFY_HISTORICAL;
+	}
+
 	if (!strcmp(arg, "--system-trust")) {
 		return LIBSSIG_VERIFY_SYSTEM_TRUST;
 	}

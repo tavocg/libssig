@@ -450,6 +450,14 @@ static libssig_status archive_verify(
 	bool ok = index && current && index_matches(index->certs, current->certs) &&
 	          index_matches(index->revocations, current->revocations) &&
 	          index_matches(index->attributes, current->attributes);
+	if (ok && (params->options & LIBSSIG_VERIFY_HISTORICAL)) {
+		ok = sk_ASN1_OCTET_STRING_num(index->certs) ==
+		         sk_ASN1_OCTET_STRING_num(current->certs) &&
+		     sk_ASN1_OCTET_STRING_num(index->revocations) ==
+		         sk_ASN1_OCTET_STRING_num(current->revocations) &&
+		     sk_ASN1_OCTET_STRING_num(index->attributes) + 1 ==
+		         sk_ASN1_OCTET_STRING_num(current->attributes);
+	}
 	unsigned char         imprint[EVP_MAX_MD_SIZE];
 	unsigned int          imprint_len = 0;
 	libssig_extend_params context = {
@@ -469,9 +477,11 @@ static libssig_status archive_verify(
 		    &imprint_len
 		);
 	}
+	libssig_verify_params anchor = *params;
+	anchor.options &= ~LIBSSIG_VERIFY_HISTORICAL;
 	libssig_status status = ok ? libssig_verify_timestamp_token(
 	                                 token,
-	                                 params,
+	                                 &anchor,
 	                                 md,
 	                                 imprint,
 	                                 imprint_len,

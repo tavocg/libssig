@@ -90,7 +90,8 @@ static libssig_status signatures_validate(
 	    .data = params->data,
 	    .data_len = params->data_len,
 	    .content = params->content,
-	    .content_len = params->content_len
+	    .content_len = params->content_len,
+	    .options = LIBSSIG_VERIFY_CURRENT_TIME
 	};
 	libssig_verify_result result = {0};
 	libssig_status        checked = libssig_verify(&verify, &result);

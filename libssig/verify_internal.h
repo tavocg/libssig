@@ -4,6 +4,7 @@
 
 #include <libssig/libssig.h>
 #include <openssl/cms.h>
+#include <time.h>
 
 /* Owned stacks; release using sk_X509_pop_free(..., X509_free). */
 libssig_status libssig_verify_certs_parse(
@@ -34,4 +35,34 @@ libssig_status libssig_verify_store_create(
     X509_STORE** out_store
 );
 
+bool libssig_verify_time_parse(const char value[21], time_t* out_time);
+libssig_status libssig_history_verify(
+    CMS_ContentInfo*             cms,
+    const libssig_verify_params* params,
+    STACK_OF(ASN1_TYPE) * revocations,
+    const STACK_OF(X509) * protected_certs,
+    libssig_verify_result* result
+);
+void libssig_verify_profiles_detect(
+    CMS_ContentInfo*       cms,
+    bool                   pades,
+    bool                   revocations,
+    libssig_verify_result* result
+);
+void libssig_verify_profiles_upgrade(
+    bool                   revocations,
+    libssig_verify_result* result
+);
+void libssig_verify_profiles_finish(
+    libssig_status         status,
+    libssig_verify_result* result
+);
+libssig_status libssig_validation_verify(
+    CMS_ContentInfo*             cms,
+    const libssig_verify_params* params,
+    STACK_OF(ASN1_TYPE) * revocations,
+    const STACK_OF(X509) * protected_certs,
+    bool                   historical,
+    libssig_verify_result* result
+);
 #endif

@@ -273,3 +273,20 @@ OCSP/CRL, errores de TSA, revocación y alteraciones de evidencia protegida.
 
 Para la comprobación independiente opcional con pyHanko y OpenSSL, ver
 [doc/profiles.md](../doc/profiles.md). No es una dependencia de compilación.
+
+Historical validation (offline, synthetic roots):
+
+```sh
+ctest --test-dir build -R '^(ades|history)$' --output-on-failure
+./build/tests/verify-file --system-trust --tsa-system-trust firma.p7m
+```
+
+`history` includes certificates already expired today, trusted timestamps from
+before expiry, earlier/later revocation, key compromise, missing/stale evidence
+and refreshing only the current archive-TSA status. See `doc/profiles.md` for
+the supported historical policy and its limits.
+
+`verify` selects the validation policy from detected evidence by default.
+`--historical` on `verify-file` additionally requires LTA even for an input
+without archive evidence. Automatic selection and per-signer level reporting
+are tested for all four CAdES and PAdES levels.
