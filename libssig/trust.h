@@ -19,6 +19,16 @@ libssig_status libssig_verify_store_create(
     const STACK_OF(X509) * roots,
     X509_STORE** out_store
 );
+libssig_status libssig_trust_fallback_add(
+    X509_STORE* store,
+    const STACK_OF(X509) * roots,
+    const unsigned char* data,
+    size_t               len
+);
+void libssig_trust_anchor_get(
+    X509_STORE_CTX*       ctx,
+    libssig_trust_anchor* anchor
+);
 bool libssig_verify_ess_check(
     CMS_SignerInfo* s,
     X509*           cert,

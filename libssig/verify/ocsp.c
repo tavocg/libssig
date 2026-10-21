@@ -73,6 +73,10 @@ static libssig_status evidence_check(
 	    .request_len = item->request_len,
 	    .response = item->response,
 	    .response_len = item->response_len,
+	    .fallback_ca_data = item->tsa ? params->tsa_fallback_ca_data
+	                                  : params->fallback_ca_data,
+	    .fallback_ca_data_len = item->tsa ? params->tsa_fallback_ca_data_len
+	                                      : params->fallback_ca_data_len,
 	    .ca_data = item->tsa ? params->tsa_ca_data : params->ca_data,
 	    .ca_data_len = item->tsa ? params->tsa_ca_data_len
 	                             : params->ca_data_len,

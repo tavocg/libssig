@@ -19,6 +19,9 @@ static libssig_status signer_trust_check(
 	/* Document signatures do not imply S/MIME certificate purpose. */
 	int ok = X509_verify_cert(ctx);
 	signer->trust_error = X509_STORE_CTX_get_error(ctx);
+	if (ok == 1) {
+		libssig_trust_anchor_get(ctx, &signer->anchor);
+	}
 	X509_STORE_CTX_free(ctx);
 	return ok == 1 ? LIBSSIG_OK : LIBSSIG_ERROR_TRUST;
 }

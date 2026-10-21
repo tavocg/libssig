@@ -34,6 +34,11 @@ static bool params_valid(const libssig_ocsp_verify_params* params) {
 	           params->intermediates_data_len,
 	           false
 	       ) &&
+	       libssig_ocsp_buffer_valid(
+	           params->fallback_ca_data,
+	           params->fallback_ca_data_len,
+	           false
+	       ) &&
 	       params->max_age <= LONG_MAX && params->clock_skew <= LONG_MAX &&
 	       !(params->options &
 	         ~(LIBSSIG_OCSP_SYSTEM_TRUST | LIBSSIG_OCSP_ALLOW_MISSING_NONCE)) &&

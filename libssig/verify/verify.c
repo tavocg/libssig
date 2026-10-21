@@ -65,6 +65,15 @@ libssig_status libssig_verify(
 	       LIBSSIG_VERIFY_REQUIRE_TIMESTAMP | LIBSSIG_VERIFY_REQUIRE_OCSP |
 	       LIBSSIG_VERIFY_REQUIRE_TSA_OCSP | LIBSSIG_VERIFY_HISTORICAL |
 	       LIBSSIG_VERIFY_CURRENT_TIME)) ||
+	    !bundle_valid(params->fallback_ca_data, params->fallback_ca_data_len) ||
+	    !bundle_valid(
+	        params->tsa_fallback_ca_data,
+	        params->tsa_fallback_ca_data_len
+	    ) ||
+	    (params->fallback_ca_data && !params->ca_data &&
+	     !(params->options & LIBSSIG_VERIFY_SYSTEM_TRUST)) ||
+	    (params->tsa_fallback_ca_data && !params->tsa_ca_data &&
+	     !(params->options & LIBSSIG_VERIFY_TSA_SYSTEM_TRUST)) ||
 	    !bundle_valid(params->ca_data, params->ca_data_len) ||
 	    !bundle_valid(
 	        params->intermediates_data,

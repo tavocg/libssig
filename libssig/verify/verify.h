@@ -58,11 +58,19 @@ typedef struct libssig_verify_params {
 	 * Los intermediarios nunca se incorporan al almacén confiable. */
 	const unsigned char* ca_data;
 
-	size_t               ca_data_len;
+	size_t ca_data_len;
+	/* CA autofirmadas de respaldo PEM/DER: hasta 16 MiB y 1024 certificados.
+	 * Consultadas tras los almacenes principales.
+	 * No sustituyen errores de firma, vigencia, propósito o revocación.
+	 * Requieren ca_data o la opción SYSTEM_TRUST del grupo. */
+	const unsigned char* fallback_ca_data;
+	size_t               fallback_ca_data_len;
 	const unsigned char* intermediates_data;
 
 	size_t intermediates_data_len;
 	/* Confianza TSA independiente; no hereda las raíces del firmante. */
+	const unsigned char* tsa_fallback_ca_data;
+	size_t               tsa_fallback_ca_data_len;
 	const unsigned char* tsa_ca_data;
 
 	size_t               tsa_ca_data_len;
@@ -79,20 +87,34 @@ typedef struct libssig_verify_params {
 	unsigned int                       options;
 } libssig_verify_params;
 
+/* Ancla de una cadena validada: huella SHA-256 DER, no un nombre inferido.
+ * FALLBACK indica una raíz consultada después de los almacenes principales. */
+typedef enum {
+	LIBSSIG_TRUST_NONE = 0,
+	LIBSSIG_TRUST_SYSTEM,
+	LIBSSIG_TRUST_ADDITIONAL,
+	LIBSSIG_TRUST_FALLBACK
+} libssig_trust_source;
+typedef struct {
+	libssig_trust_source source;
+	unsigned char        sha256[32];
+} libssig_trust_anchor;
+
 /* Resultado del sello del firmante; valid comprueba firma, ESS, propósito TSA
  * y vínculo con la firma del documento. La confianza se evalúa por separado.
  * time contiene UTC ISO 8601 a precisión de segundos, solo si valid = true.
  * Ausente: present = false, status = ERROR_NOT_FOUND. cert_der pertenece al
  * resultado y se libera con libssig_verify_free. */
 typedef struct {
-	bool           present;
-	bool           valid;
-	bool           trust_checked;
-	bool           trusted;
-	libssig_status status;
-	long           trust_error;
-	char           time[21];
-	unsigned char* cert_der;
+	bool                 present;
+	bool                 valid;
+	bool                 trust_checked;
+	bool                 trusted;
+	libssig_status       status;
+	long                 trust_error;
+	libssig_trust_anchor anchor;
+	char                 time[21];
+	unsigned char*       cert_der;
 
 	size_t              cert_der_len;
 	libssig_ocsp_result ocsp;
@@ -112,6 +134,7 @@ typedef struct {
 	size_t         cert_der_len;
 	char*          mime_type; /* NULL si no hay atributo MIME firmado. */
 	long trust_error;         /* Código X.509 de OpenSSL; 0 si no hay error. */
+	libssig_trust_anchor     anchor;
 	libssig_verify_timestamp timestamp;
 	libssig_verify_timestamp archive;
 	libssig_ocsp_result      ocsp;

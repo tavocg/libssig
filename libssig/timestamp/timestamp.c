@@ -12,6 +12,11 @@ static bool params_valid(const libssig_timestamp_params* params) {
 	return params && buffer_valid(params->data, params->data_len, true) &&
 	       buffer_valid(params->request, params->request_len, true) &&
 	       buffer_valid(params->response, params->response_len, true) &&
+	       buffer_valid(
+	           params->fallback_ca_data,
+	           params->fallback_ca_data_len,
+	           false
+	       ) &&
 	       buffer_valid(params->ca_data, params->ca_data_len, false) &&
 	       buffer_valid(
 	           params->intermediates_data,

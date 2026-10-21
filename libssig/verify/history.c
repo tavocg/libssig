@@ -342,10 +342,11 @@ static libssig_status certificate_status(
 }
 
 static libssig_status chain_check(
-    X509*            cert,
-    bool             tsa,
-    history_context* ctx,
-    long*            trust_error
+    X509*                 cert,
+    bool                  tsa,
+    history_context*      ctx,
+    long*                 trust_error,
+    libssig_trust_anchor* anchor
 ) {
 	X509_STORE_CTX* verify = X509_STORE_CTX_new();
 	bool            initialized = verify && X509_STORE_CTX_init(
@@ -366,6 +367,9 @@ static libssig_status chain_check(
 	*trust_error = initialized ? X509_STORE_CTX_get_error(verify)
 	                           : X509_V_ERR_OUT_OF_MEM;
 	STACK_OF(X509)* chain = ok == 1 ? X509_STORE_CTX_get1_chain(verify) : NULL;
+	if (ok == 1 && anchor) {
+		libssig_trust_anchor_get(verify, anchor);
+	}
 	X509_STORE_CTX_free(verify);
 	libssig_status status = ok == 1 && chain ? LIBSSIG_OK : LIBSSIG_ERROR_TRUST;
 	for (int i = 0; status == LIBSSIG_OK && i + 1 < sk_X509_num(chain); ++i) {
@@ -386,6 +390,8 @@ static libssig_status store_load(
 ) {
 	libssig_verify_params trust = *params;
 	if (tsa) {
+		trust.fallback_ca_data = params->tsa_fallback_ca_data;
+		trust.fallback_ca_data_len = params->tsa_fallback_ca_data_len;
 		trust.ca_data = params->tsa_ca_data;
 		trust.ca_data_len = params->tsa_ca_data_len;
 		trust.options = (params->options & LIBSSIG_VERIFY_TSA_SYSTEM_TRUST)
@@ -413,7 +419,7 @@ static libssig_status tsa_chain(
 	X509* cert = cursor ? d2i_X509(NULL, &cursor, (long)stamp->cert_der_len)
 	                    : NULL;
 	long  error = 0;
-	libssig_status status = cert ? chain_check(cert, true, ctx, &error)
+	libssig_status status = cert ? chain_check(cert, true, ctx, &error, NULL)
 	                             : LIBSSIG_ERROR_EVIDENCE;
 	X509_free(cert);
 	return status;
@@ -548,7 +554,13 @@ static libssig_status signer_check(
 	libssig_status status = store_load(params, false, &ctx->store);
 	if (status == LIBSSIG_OK) {
 		*chain_checked = true;
-		status = chain_check(cert, false, ctx, &signer->trust_error);
+		status = chain_check(
+		    cert,
+		    false,
+		    ctx,
+		    &signer->trust_error,
+		    &signer->anchor
+		);
 	}
 	X509_STORE_free(ctx->store);
 	ctx->store = NULL;

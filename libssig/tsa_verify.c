@@ -47,6 +47,8 @@ static libssig_status trust_load(
 	                   (params->options & LIBSSIG_VERIFY_TSA_SYSTEM_TRUST);
 	if (status == LIBSSIG_OK && trust->requested) {
 		libssig_verify_params options = {
+		    .fallback_ca_data = params->tsa_fallback_ca_data,
+		    .fallback_ca_data_len = params->tsa_fallback_ca_data_len,
 		    .options = (params->options & LIBSSIG_VERIFY_TSA_SYSTEM_TRUST)
 		                   ? LIBSSIG_VERIFY_SYSTEM_TRUST
 		                   : 0,
@@ -295,6 +297,9 @@ static libssig_status trust_check(
 			}
 		}
 		result->trusted = ok == 1;
+		if (ok == 1) {
+			libssig_trust_anchor_get(ctx, &result->anchor);
+		}
 		status = ok == 1 ? LIBSSIG_OK : LIBSSIG_ERROR_TRUST;
 	}
 	X509_STORE_CTX_free(ctx);

@@ -223,3 +223,31 @@ The independent check recalculates CAdES ATSv3/index hashes with asn1crypto,
 verifies the archive token with OpenSSL and validates the PAdES evidence record
 with pyHanko, offline against synthetic test roots. These fixtures have short
 certificate validity periods and should be regenerated before checking them.
+
+## Fallback trust anchors
+
+Verification, timestamp application and OCSP accept `fallback_ca_data` and
+`fallback_ca_data_len`; verification has a separate `tsa_fallback_ca_data`
+group. The caller must also enable the corresponding system trust option or
+supply primary `ca_data`. Fallback PEM/DER is bounded to 16 MiB and at most 1024 self-signed CA
+certificates. Intermediates remain untrusted chain-building candidates.
+
+Primary OpenSSL lookups run before fallback issuer selection. Missing issuers
+can be resolved locally using fallback roots, including equal subject names
+with different authority key identifiers. This is issuer discovery, not a
+retry of signing or network services. A rejected, expired or revoked chain is
+not made valid by suppressing its verification errors. The same settings flow
+through signing services, archive renewal and historical validation.
+
+Each verified document signer and timestamp reports an `anchor` with a DER
+SHA-256 fingerprint and source (`SYSTEM`, `ADDITIONAL` or `FALLBACK`). `NONE`
+means no successful chain was recorded. Additional roots take reporting
+precedence when the identical root was also supplied explicitly. The source
+records certificate-chain trust, not revocation success or legal accreditation.
+All consumers must rebuild against the extended public parameter/result structs.
+
+The synthetic JAdES/XAdES matrix uses fallback for document and TSA trust and
+asserts exactly one PKCS#11 signature, login, search finalization and session
+close per successful signing operation. CMS/PDF long-term fixtures exercise TSA
+fallback; dedicated trust, timestamp and OCSP tests cover primary preference,
+missing roots, malformed inputs and rejection of intermediates as anchors.

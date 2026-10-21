@@ -599,6 +599,13 @@ static int system_trust_check(void) {
 	params.ca_data_len = 0;
 	params.options = LIBSSIG_OCSP_SYSTEM_TRUST;
 	CHECK(verify_check(params, LIBSSIG_OK, LIBSSIG_OCSP_GOOD) == 0);
+	CHECK(setenv("SSL_CERT_FILE", "/nonexistent-libssig-ocsp", 1) == 0);
+	params.fallback_ca_data = issuer_pem.data;
+	params.fallback_ca_data_len = issuer_pem.len;
+	CHECK(verify_check(params, LIBSSIG_OK, LIBSSIG_OCSP_GOOD) == 0);
+	params.fallback_ca_data = NULL;
+	params.fallback_ca_data_len = 0;
+	CHECK(verify_check(params, LIBSSIG_ERROR_TRUST, LIBSSIG_OCSP_FAILED) == 0);
 	OPENSSL_free(response.data);
 	CHECK(unlink(path) == 0);
 	return 0;

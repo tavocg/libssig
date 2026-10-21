@@ -130,7 +130,12 @@ libssig_status libssig_verify_store_create(
 			return LIBSSIG_ERROR_CRYPTO;
 		}
 	}
-	return LIBSSIG_OK;
+	return libssig_trust_fallback_add(
+	    *out_store,
+	    roots,
+	    params->fallback_ca_data,
+	    params->fallback_ca_data_len
+	);
 }
 
 /* Reject duplicate attributes and multiple values instead of choosing one. */

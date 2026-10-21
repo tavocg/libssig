@@ -24,6 +24,7 @@ static CK_RV document_raw_sign(
 	if (*out_len < needed) {
 		return CKR_BUFFER_TOO_SMALL;
 	}
+	++sign_count;
 	EVP_MD_CTX*   ctx = EVP_MD_CTX_new();
 	EVP_PKEY_CTX* key_ctx = NULL;
 	unsigned char signature[1024];
@@ -104,7 +105,14 @@ libssig_status document_fixture_sign(
 	params.token = &token;
 	params.pin = (const unsigned char*)"1234";
 	params.pin_len = 4;
+	unsigned int   before_sign = sign_count, before_login = login_count;
+	unsigned int   before_close = close_count, before_final = final_count;
 	libssig_status status = libssig_sign(&ctx, &params, output);
+	if (status == LIBSSIG_OK &&
+	    (sign_count != before_sign + 1 || login_count != before_login + 1 ||
+	     close_count != before_close + 1 || final_count != before_final + 1)) {
+		status = LIBSSIG_ERROR_PKCS11;
+	}
 	OPENSSL_free(der);
 	return status;
 }

@@ -170,6 +170,9 @@ static int lt_revoked_check(
 #define LIBSSIG_ADES_FIXTURE_MAIN main
 #endif
 int LIBSSIG_ADES_FIXTURE_MAIN(int argc, char** argv) {
+	CHECK(unsetenv("NIX_SSL_CERT_FILE") == 0);
+	CHECK(setenv("SSL_CERT_FILE", "/nonexistent-libssig-ades-root", 1) == 0);
+	CHECK(setenv("SSL_CERT_DIR", "/nonexistent-libssig-ades-dir", 1) == 0);
 	CHECK(argc == 2);
 	directory = argv[1];
 	root_key = EVP_PKEY_Q_keygen(NULL, NULL, "RSA", 2048);
@@ -200,8 +203,9 @@ int LIBSSIG_ADES_FIXTURE_MAIN(int argc, char** argv) {
 	libssig_verify_params trust = {
 	    .ca_data = doc_root.data,
 	    .ca_data_len = doc_root.len,
-	    .tsa_ca_data = (unsigned char*)root_bytes,
-	    .tsa_ca_data_len = (size_t)root_len
+	    .tsa_fallback_ca_data = (unsigned char*)root_bytes,
+	    .tsa_fallback_ca_data_len = (size_t)root_len,
+	    .options = LIBSSIG_VERIFY_TSA_SYSTEM_TRUST
 	};
 	libssig_sign_services services =
 	    {.exchange = exchange, .tsa_url = "http://test/tsa", .trust = &trust};

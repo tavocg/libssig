@@ -617,6 +617,14 @@ static int roundtrip_check(int algo, int hash, bool detached) {
 		libssig_signature trusted = {0};
 		CHECK(libssig_timestamp(&system, &trusted) == LIBSSIG_OK);
 		libssig_signature_free(&trusted);
+		CHECK(setenv("SSL_CERT_FILE", "/nonexistent-libssig-tsa", 1) == 0);
+		system.fallback_ca_data = params.ca_data;
+		system.fallback_ca_data_len = params.ca_data_len;
+		CHECK(libssig_timestamp(&system, &trusted) == LIBSSIG_OK);
+		libssig_signature_free(&trusted);
+		system.fallback_ca_data = NULL;
+		system.fallback_ca_data_len = 0;
+		CHECK(libssig_timestamp(&system, &trusted) == LIBSSIG_ERROR_TRUST);
 		CHECK(file_write("timestamp.tsq", request.data, request.len) == 0);
 		CHECK(file_write("timestamp.tsr", encoded.data, encoded.len) == 0);
 		CHECK(file_write("timestamped.p7m", output.data, output.len) == 0);

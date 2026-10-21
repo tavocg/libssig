@@ -195,6 +195,20 @@ static int invalid_bundles_check(
 	return 0;
 }
 
+static int anchor_check(
+    libssig_verify_params params,
+    libssig_trust_source  source
+) {
+	libssig_verify_result result = {0};
+	CHECK(libssig_verify(&params, &result) == LIBSSIG_OK);
+	CHECK(result.count == 1 && result.trusted);
+	CHECK(result.signers[0].anchor.source == source);
+	unsigned char zero[32] = {0};
+	CHECK(memcmp(result.signers[0].anchor.sha256, zero, sizeof(zero)) != 0);
+	libssig_verify_free(&result);
+	return 0;
+}
+
 static int system_combination_check(
     libssig_verify_params params,
     buffer                root,
@@ -213,7 +227,9 @@ static int system_combination_check(
 	params.options = 0;
 	CHECK(verify_check(&params, LIBSSIG_ERROR_TRUST) == 0);
 	params.options = LIBSSIG_VERIFY_SYSTEM_TRUST;
-	CHECK(verify_check(&params, LIBSSIG_OK) == 0);
+	params.fallback_ca_data = root.data;
+	params.fallback_ca_data_len = root.len;
+	CHECK(anchor_check(params, LIBSSIG_TRUST_SYSTEM) == 0);
 	params.ca_data = NULL;
 	params.ca_data_len = 0;
 	CHECK(verify_check(&params, LIBSSIG_OK) == 0);
@@ -221,9 +237,17 @@ static int system_combination_check(
 	file = fopen(path, "wb");
 	CHECK(file && fwrite(other.data, 1, other.len, file) == other.len);
 	CHECK(fclose(file) == 0);
+	CHECK(anchor_check(params, LIBSSIG_TRUST_FALLBACK) == 0);
 	params.ca_data = root.data;
 	params.ca_data_len = root.len;
-	CHECK(verify_check(&params, LIBSSIG_OK) == 0);
+	CHECK(anchor_check(params, LIBSSIG_TRUST_ADDITIONAL) == 0);
+	params.ca_data = NULL;
+	params.ca_data_len = 0;
+	params.fallback_ca_data = other.data;
+	params.fallback_ca_data_len = other.len;
+	CHECK(verify_check(&params, LIBSSIG_ERROR_TRUST) == 0);
+	params.fallback_ca_data_len = 0;
+	CHECK(verify_check(&params, LIBSSIG_ERROR_ARGUMENT) == 0);
 	CHECK(unlink(path) == 0);
 	CHECK(setenv("SSL_CERT_FILE", "/nonexistent-libssig-ca", 1) == 0);
 	return 0;
@@ -268,6 +292,11 @@ static int chain_check(
 	CHECK(verify_check(&params, LIBSSIG_OK) == 0);
 	CHECK(invalid_bundles_check(params, root, intermediate) == 0);
 	CHECK(system_combination_check(params, root, other) == 0);
+	params.fallback_ca_data = intermediate.data;
+	params.fallback_ca_data_len = intermediate.len;
+	CHECK(verify_check(&params, LIBSSIG_ERROR_FORMAT) == 0);
+	params.fallback_ca_data = NULL;
+	params.fallback_ca_data_len = 0;
 	params.intermediates_data = NULL;
 	params.intermediates_data_len = 0;
 	CHECK(verify_check(&params, LIBSSIG_ERROR_TRUST) == 0);

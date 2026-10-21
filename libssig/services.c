@@ -120,6 +120,8 @@ libssig_status libssig_ades_response(
 	const libssig_verify_params* trust = services->trust ? services->trust
 	                                                     : &empty;
 	libssig_timestamp_params     params = {
+	        .fallback_ca_data = trust->tsa_fallback_ca_data,
+	        .fallback_ca_data_len = trust->tsa_fallback_ca_data_len,
 	        .ca_data = trust->tsa_ca_data,
 	        .ca_data_len = trust->tsa_ca_data_len,
 	        .intermediates_data = trust->tsa_intermediates_data,

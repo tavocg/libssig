@@ -63,6 +63,8 @@ static libssig_verify_params trust_params(
 	                                  LIBSSIG_VERIFY_TSA_SYSTEM_TRUST
 	                   };
 	if (tsa) {
+		params.fallback_ca_data = params.tsa_fallback_ca_data;
+		params.fallback_ca_data_len = params.tsa_fallback_ca_data_len;
 		params.ca_data = params.tsa_ca_data;
 		params.ca_data_len = params.tsa_ca_data_len;
 		params.intermediates_data = params.tsa_intermediates_data;
@@ -337,6 +339,8 @@ static libssig_status certificate_ocsp(
 		    .request_len = request.len,
 		    .response = response.data,
 		    .response_len = response.len,
+		    .fallback_ca_data = trust.fallback_ca_data,
+		    .fallback_ca_data_len = trust.fallback_ca_data_len,
 		    .ca_data = trust.ca_data,
 		    .ca_data_len = trust.ca_data_len,
 		    .intermediates_data = (const unsigned char*)pem,

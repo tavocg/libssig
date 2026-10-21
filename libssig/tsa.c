@@ -25,6 +25,8 @@ static libssig_status trust_load(
 
 	if (status == LIBSSIG_OK) {
 		libssig_verify_params trust = {
+		    .fallback_ca_data = params->fallback_ca_data,
+		    .fallback_ca_data_len = params->fallback_ca_data_len,
 		    .options = (params->options & LIBSSIG_TIMESTAMP_SYSTEM_TRUST)
 		                   ? LIBSSIG_VERIFY_SYSTEM_TRUST
 		                   : 0,

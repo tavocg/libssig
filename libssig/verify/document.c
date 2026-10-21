@@ -54,6 +54,9 @@ libssig_status libssig_document_validate(
 			signer->trust_error = ctx ? X509_STORE_CTX_get_error(ctx)
 			                          : X509_V_ERR_OUT_OF_MEM;
 			result->trusted = ok;
+			if (ok) {
+				libssig_trust_anchor_get(ctx, &signer->anchor);
+			}
 			if (!ok) {
 				status = LIBSSIG_ERROR_TRUST;
 			}

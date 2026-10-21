@@ -56,6 +56,12 @@ typedef struct {
 	size_t               response_len;
 	const unsigned char* ca_data;
 	size_t               ca_data_len;
+	/* CA autofirmadas de respaldo PEM/DER: hasta 16 MiB y 1024 certificados.
+	 * Consultadas tras los almacenes principales.
+	 * No sustituyen errores de firma, vigencia, propósito o revocación.
+	 * Requieren ca_data o la opción SYSTEM_TRUST del grupo. */
+	const unsigned char* fallback_ca_data;
+	size_t               fallback_ca_data_len;
 	const unsigned char* intermediates_data;
 	size_t               intermediates_data_len;
 	unsigned int         options;

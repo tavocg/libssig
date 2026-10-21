@@ -80,7 +80,13 @@ static int verify_check(
 	    result.signers[0].level == level && result.signers[0].level_detected &&
 	    result.signers[0].level_validated
 	);
+	CHECK(result.signers[0].anchor.source == LIBSSIG_TRUST_FALLBACK);
 	CHECK(result.signers[0].timestamp.present == (level != LIBSSIG_LEVEL_B_B));
+	if (level != LIBSSIG_LEVEL_B_B) {
+		CHECK(
+		    result.signers[0].timestamp.anchor.source == LIBSSIG_TRUST_FALLBACK
+		);
+	}
 	CHECK(result.signers[0].archive.present == (level == LIBSSIG_LEVEL_B_LTA));
 	libssig_verify_free(&result);
 	if (detached) {
@@ -118,6 +124,11 @@ static int timestamp_api_check(
 	    .request_len = request.len,
 	    .response = response.data,
 	    .response_len = response.len,
+	    .fallback_ca_data = trust.tsa_fallback_ca_data,
+	    .fallback_ca_data_len = trust.tsa_fallback_ca_data_len,
+	    .options = trust.options & LIBSSIG_VERIFY_TSA_SYSTEM_TRUST
+	                   ? LIBSSIG_TIMESTAMP_SYSTEM_TRUST
+	                   : 0,
 	    .ca_data = trust.tsa_ca_data,
 	    .ca_data_len = trust.tsa_ca_data_len
 	};
@@ -335,6 +346,11 @@ static int parser_mutations_check(
 }
 
 int main(int argc, char** argv) {
+	CHECK(unsetenv("NIX_SSL_CERT_FILE") == 0);
+	CHECK(
+	    setenv("SSL_CERT_FILE", "/nonexistent-libssig-document-root", 1) == 0
+	);
+	CHECK(setenv("SSL_CERT_DIR", "/nonexistent-libssig-document-dir", 1) == 0);
 	CHECK(argc == 2);
 	directory = argv[1];
 	root_key = EVP_PKEY_Q_keygen(NULL, NULL, "RSA", 2048);
@@ -360,10 +376,11 @@ int main(int argc, char** argv) {
 	    ) == 0
 	);
 	libssig_verify_params trust = {
-	    .ca_data = (unsigned char*)root_bytes,
-	    .ca_data_len = (size_t)root_len,
-	    .tsa_ca_data = (unsigned char*)root_bytes,
-	    .tsa_ca_data_len = (size_t)root_len
+	    .fallback_ca_data = (unsigned char*)root_bytes,
+	    .fallback_ca_data_len = (size_t)root_len,
+	    .tsa_fallback_ca_data = (unsigned char*)root_bytes,
+	    .tsa_fallback_ca_data_len = (size_t)root_len,
+	    .options = LIBSSIG_VERIFY_SYSTEM_TRUST | LIBSSIG_VERIFY_TSA_SYSTEM_TRUST
 	};
 	libssig_sign_services services =
 	    {.exchange = exchange, .tsa_url = "http://test/tsa", .trust = &trust};

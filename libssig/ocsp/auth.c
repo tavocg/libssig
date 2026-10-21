@@ -97,6 +97,8 @@ libssig_status libssig_ocsp_authenticate(
 
 	if (status == LIBSSIG_OK) {
 		libssig_verify_params trust = {
+		    .fallback_ca_data = params->fallback_ca_data,
+		    .fallback_ca_data_len = params->fallback_ca_data_len,
 		    .options = (params->options & LIBSSIG_OCSP_SYSTEM_TRUST)
 		                   ? LIBSSIG_VERIFY_SYSTEM_TRUST
 		                   : 0,
