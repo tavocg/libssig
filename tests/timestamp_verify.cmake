@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
+# Nix OpenSSL gives this variable precedence over SSL_CERT_FILE.
+unset(ENV{NIX_SSL_CERT_FILE})
 file(MAKE_DIRECTORY "${FIXTURES}")
 execute_process(COMMAND "${SIGN_TEST}" "${FIXTURES}" RESULT_VARIABLE result)
 if(NOT result EQUAL 0)

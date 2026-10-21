@@ -702,6 +702,8 @@ static int integration_check(void) {
 }
 
 int main(int argc, char** argv) {
+	/* Nix OpenSSL gives this variable precedence over SSL_CERT_FILE. */
+	CHECK(unsetenv("NIX_SSL_CERT_FILE") == 0);
 	CHECK(argc <= 2);
 	directory = argc == 2 ? argv[1] : NULL;
 	issuer_key = EVP_PKEY_Q_keygen(NULL, NULL, "EC", "prime256v1");

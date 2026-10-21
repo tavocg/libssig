@@ -260,6 +260,8 @@ static int invalid_check(void) {
 }
 
 int main(void) {
+	/* Nix OpenSSL gives this variable precedence over SSL_CERT_FILE. */
+	CHECK(unsetenv("NIX_SSL_CERT_FILE") == 0);
 	CHECK(setenv("SSL_CERT_FILE", "/nonexistent-libssig-ca", 1) == 0);
 	CHECK(setenv("SSL_CERT_DIR", "/nonexistent-libssig-ca-dir", 1) == 0);
 	CHECK(invalid_check() == 0);

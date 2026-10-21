@@ -658,6 +658,8 @@ static int invalid_check(void) {
 }
 
 int main(int argc, char** argv) {
+	/* Nix OpenSSL gives this variable precedence over SSL_CERT_FILE. */
+	CHECK(unsetenv("NIX_SSL_CERT_FILE") == 0);
 	CHECK(argc == 2);
 	directory = argv[1];
 	root_key = EVP_PKEY_Q_keygen(NULL, NULL, "RSA", 2048);

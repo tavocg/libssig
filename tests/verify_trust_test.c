@@ -300,6 +300,8 @@ static int chain_check(
 }
 
 int main(int argc, char** argv) {
+	/* Nix OpenSSL gives this variable precedence over SSL_CERT_FILE. */
+	CHECK(unsetenv("NIX_SSL_CERT_FILE") == 0);
 	CHECK(argc <= 2);
 	CHECK(setenv("SSL_CERT_FILE", "/nonexistent-libssig-ca", 1) == 0);
 	CHECK(setenv("SSL_CERT_DIR", "/nonexistent-libssig-ca-dir", 1) == 0);
