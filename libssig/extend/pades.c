@@ -4,6 +4,92 @@
 #include <stdlib.h>
 #include <string.h>
 
+static libssig_status pades_renew(
+    qpdf_data                    pdf,
+    qpdf_oh                      fields,
+    const libssig_extend_params* params,
+    libssig_signature*           output
+) {
+	if (params->level != LIBSSIG_LEVEL_B_LTA) {
+		return LIBSSIG_ERROR_UNSUPPORTED;
+	}
+	const libssig_verify_params defaults = {
+	    .options = LIBSSIG_VERIFY_SYSTEM_TRUST | LIBSSIG_VERIFY_TSA_SYSTEM_TRUST
+	};
+	libssig_verify_params verify = params->services->trust
+	                                   ? *params->services->trust
+	                                   : defaults;
+	verify.data = params->data;
+	verify.data_len = params->data_len;
+	libssig_verify_result result = {0};
+	libssig_status        status = libssig_verify(&verify, &result);
+	libssig_verify_free(&result);
+	libssig_validation_data evidence = {0};
+	CMS_ContentInfo*        cms = NULL;
+	int                     count = qpdf_oh_get_array_n_items(pdf, fields);
+	size_t                  previous_end = 0;
+	for (int i = 0; status == LIBSSIG_OK && i < count; ++i) {
+		qpdf_oh               field = qpdf_oh_get_array_item(pdf, fields, i);
+		libssig_pdf_signature signature = {0};
+		status = libssig_pdf_signature_read(
+		    pdf,
+		    qpdf_oh_get_key_if_dict(pdf, field, "/V"),
+		    &verify,
+		    &signature
+		);
+		if (status == LIBSSIG_OK &&
+		    ((i == 0 && signature.timestamp) ||
+		     (i > 0 && !signature.timestamp) || signature.end <= previous_end ||
+		     (i == count - 1 && signature.end != params->data_len))) {
+			status = LIBSSIG_ERROR_UNSUPPORTED;
+		}
+		previous_end = signature.end;
+		if (status == LIBSSIG_OK && i == 0) {
+			const unsigned char* cursor = signature.cms.data;
+			cms = d2i_CMS_ContentInfo(NULL, &cursor, (long)signature.cms.len);
+			status = cms ? libssig_validation_collect(
+			                   cms,
+			                   params->services,
+			                   &evidence
+			               )
+			             : LIBSSIG_ERROR_FORMAT;
+		} else if (status == LIBSSIG_OK) {
+			status = libssig_validation_timestamp_collect(
+			    &signature.cms,
+			    params->services,
+			    &evidence
+			);
+		}
+		libssig_signature_free(&signature.cms);
+		libssig_signature_free(&signature.content);
+	}
+	libssig_pdf_revision revision = {0};
+	if (status == LIBSSIG_OK) {
+		status = libssig_pdf_open(params->data, params->data_len, &revision);
+	}
+	if (status == LIBSSIG_OK) {
+		status = libssig_pdf_dss(&revision, &evidence);
+	}
+	if (status == LIBSSIG_OK) {
+		status = libssig_pdf_finish(&revision, output);
+	}
+	libssig_pdf_close(&revision);
+	libssig_validation_free(&evidence);
+	CMS_ContentInfo_free(cms);
+	libssig_sign_params signing = {
+	    .level = LIBSSIG_LEVEL_B_LTA,
+	    .hash = params->hash,
+	    .services = params->services
+	};
+	if (status == LIBSSIG_OK) {
+		status = libssig_pdf_archive(&signing, output);
+	}
+	if (status != LIBSSIG_OK) {
+		libssig_signature_free(output);
+	}
+	return status;
+}
+
 libssig_status libssig_pades_extend(
     const libssig_extend_params* params,
     libssig_signature*           output
@@ -42,6 +128,11 @@ libssig_status libssig_pades_extend(
 				++count;
 			}
 		}
+	}
+	if (status == LIBSSIG_OK && count > 1 && count <= 1024) {
+		status = pades_renew(pdf, fields, params, output);
+		qpdf_cleanup(&pdf);
+		return status;
 	}
 	if (status == LIBSSIG_OK && count != 1) {
 		status = LIBSSIG_ERROR_UNSUPPORTED;

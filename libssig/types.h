@@ -54,6 +54,8 @@ typedef enum {
 	LIBSSIG_FORMAT_CADES,
 	LIBSSIG_FORMAT_CMS,
 	LIBSSIG_FORMAT_PADES,
+	LIBSSIG_FORMAT_XADES,
+	LIBSSIG_FORMAT_JADES,
 } libssig_format;
 
 typedef enum {

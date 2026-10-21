@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "internal.h"
+#include <libssig/document.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -38,7 +39,8 @@ static libssig_status archive_verify(
     int                          signer_index,
     ASN1_TYPE*                   value,
     const libssig_verify_params* params,
-    libssig_verify_timestamp*    result
+    libssig_verify_timestamp*    result,
+    bool*                        complete
 ) {
 	if (!value || value->type != V_ASN1_SEQUENCE) {
 		return LIBSSIG_ERROR_TIMESTAMP;
@@ -92,13 +94,13 @@ static libssig_status archive_verify(
 	bool ok = index && current && index_matches(index->certs, current->certs) &&
 	          index_matches(index->revocations, current->revocations) &&
 	          index_matches(index->attributes, current->attributes);
-	if (ok && (params->options & LIBSSIG_VERIFY_HISTORICAL)) {
-		ok = sk_ASN1_OCTET_STRING_num(index->certs) ==
-		         sk_ASN1_OCTET_STRING_num(current->certs) &&
-		     sk_ASN1_OCTET_STRING_num(index->revocations) ==
-		         sk_ASN1_OCTET_STRING_num(current->revocations) &&
-		     sk_ASN1_OCTET_STRING_num(index->attributes) + 1 ==
-		         sk_ASN1_OCTET_STRING_num(current->attributes);
+	if (ok) {
+		*complete = sk_ASN1_OCTET_STRING_num(index->certs) ==
+		                sk_ASN1_OCTET_STRING_num(current->certs) &&
+		            sk_ASN1_OCTET_STRING_num(index->revocations) ==
+		                sk_ASN1_OCTET_STRING_num(current->revocations) &&
+		            sk_ASN1_OCTET_STRING_num(index->attributes) + 1 ==
+		                sk_ASN1_OCTET_STRING_num(current->attributes);
 	}
 	unsigned char         imprint[EVP_MAX_MD_SIZE];
 	unsigned int          imprint_len = 0;
@@ -120,7 +122,9 @@ static libssig_status archive_verify(
 		);
 	}
 	libssig_verify_params anchor = *params;
-	anchor.options &= ~LIBSSIG_VERIFY_HISTORICAL;
+	if (*complete) {
+		anchor.options &= ~LIBSSIG_VERIFY_HISTORICAL;
+	}
 	libssig_status status = ok ? libssig_verify_timestamp_token(
 	                                 token,
 	                                 &anchor,
@@ -152,25 +156,81 @@ libssig_status libssig_verify_archives(
 		    CMS_get0_SignerInfos(cms),
 		    (int)i
 		);
-		int pos = -1;
+
+		int  pos = -1;
+		bool found = false;
+		int  count = 0;
 		while ((pos = CMS_unsigned_get_attr_by_OBJ(signer, oid, pos)) >= 0) {
+			if (++count > 1024) {
+				status = LIBSSIG_ERROR_TIMESTAMP;
+				break;
+			}
 			X509_ATTRIBUTE*          attr = CMS_unsigned_get_attr(signer, pos);
 			libssig_verify_timestamp stamp = {.present = true};
+			bool                     complete = false;
 			status = X509_ATTRIBUTE_count(attr) == 1
 			             ? archive_verify(
 			                   cms,
 			                   (int)i,
 			                   X509_ATTRIBUTE_get0_type(attr, 0),
 			                   params,
-			                   &stamp
+			                   &stamp,
+			                   &complete
 			               )
 			             : LIBSSIG_ERROR_TIMESTAMP;
 			stamp.status = status;
-			free(result->signers[i].archive.cert_der);
-			result->signers[i].archive = stamp;
+			if (complete || !found || status != LIBSSIG_OK) {
+				free(result->signers[i].archive.cert_der);
+				result->signers[i].archive = stamp;
+				stamp.cert_der = NULL;
+			}
+			found = found || complete;
+			free(stamp.cert_der);
 			if (status != LIBSSIG_OK) {
 				break;
 			}
+		}
+		if (status == LIBSSIG_OK &&
+		    (params->options & LIBSSIG_VERIFY_HISTORICAL) && count && !found) {
+			status = LIBSSIG_ERROR_TIMESTAMP;
+		}
+		if (status == LIBSSIG_OK && count > 1 &&
+		    (params->options & LIBSSIG_VERIFY_HISTORICAL)) {
+			libssig_raw_cms*        raw = libssig_cms_decode(cms);
+			libssig_validation_data evidence = {
+			    .certs = CMS_get1_certs(cms),
+			    .revocations = raw ? raw->signed_data->revocations : NULL
+			};
+			if (!raw || !evidence.certs) {
+				status = LIBSSIG_ERROR_EVIDENCE;
+			}
+			pos = -1;
+			while (status == LIBSSIG_OK &&
+			       (pos = CMS_unsigned_get_attr_by_OBJ(signer, oid, pos)) >=
+			           0) {
+				X509_ATTRIBUTE* attr = CMS_unsigned_get_attr(signer, pos);
+				libssig_verify_timestamp stamp = {0};
+				bool                     complete = false;
+				status = archive_verify(
+				    cms,
+				    (int)i,
+				    X509_ATTRIBUTE_get0_type(attr, 0),
+				    params,
+				    &stamp,
+				    &complete
+				);
+				if (status == LIBSSIG_OK && !complete) {
+					status = libssig_document_evidence_stamp_check(
+					    &stamp,
+					    &result->signers[i].archive,
+					    &evidence,
+					    params
+					);
+				}
+				free(stamp.cert_der);
+			}
+			sk_X509_pop_free(evidence.certs, X509_free);
+			libssig_raw_cms_free(raw);
 		}
 	}
 	ASN1_OBJECT_free(oid);

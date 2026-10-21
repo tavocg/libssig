@@ -290,3 +290,27 @@ the supported historical policy and its limits.
 `--historical` on `verify-file` additionally requires LTA even for an input
 without archive evidence. Automatic selection and per-signer level reporting
 are tested for all four CAdES and PAdES levels.
+
+## JSON/XML AdES
+
+`document_ades` uses a simulated PKCS#11 module, local keys, TSA and OCSP/CRL;
+no physical card or personal certificates are needed. It covers 144 combinations
+of formats, levels, algorithms, hashes and attached/detached content, plus
+B-B-to-LTA extension, archive renewal, separate request/response timestamping,
+nonce mismatch, invalid payloads, duplicate XML IDs, missing validation data,
+DTD rejection, duplicate JSON members and 600 parser mutations/truncations.
+
+Optional independent checks use Python with cryptography, lxml and jsonschema:
+
+```sh
+python tests/document_interop.py build/tests/document-fixtures
+python tests/document_schema.py build/tests/document-fixtures /tmp/libssig-standards
+```
+
+The second command expects unmodified official schemas downloaded under
+`xades-schemas/` from ETSI's `esi/x19_13201_XAdES` tag `v1.3.1`, under
+`jades-schemas/` from `esi/x19_182_JAdES` tag `v1.2.1`, and the W3C
+`xmldsig-core-schema.xsd` file in the parent directory. It performs no downloads.
+The first command independently recomputes signatures and archive inputs and
+checks timestamps with OpenSSL. The existing `ades_interop.py` checks CAdES
+ATSv3 independently and PAdES with pyHanko.

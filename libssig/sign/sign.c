@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "internal.h"
 #include <libssig/ades.h>
+#include <libssig/document.h>
 #include <limits.h>
 #include <string.h>
 
@@ -40,7 +41,9 @@ static libssig_status params_check(
 
 	if ((params->format != LIBSSIG_FORMAT_CADES &&
 	     params->format != LIBSSIG_FORMAT_CMS &&
-	     params->format != LIBSSIG_FORMAT_PADES) ||
+	     params->format != LIBSSIG_FORMAT_PADES &&
+	     params->format != LIBSSIG_FORMAT_XADES &&
+	     params->format != LIBSSIG_FORMAT_JADES) ||
 	    (params->algo != LIBSSIG_ALGO_RSA_PKCS &&
 	     params->algo != LIBSSIG_ALGO_RSA_PSS &&
 	     params->algo != LIBSSIG_ALGO_ECDSA) ||
@@ -67,7 +70,9 @@ static libssig_status params_check(
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
 
-	if (params->format == LIBSSIG_FORMAT_CADES &&
+	if ((params->format == LIBSSIG_FORMAT_CADES ||
+	     params->format == LIBSSIG_FORMAT_JADES ||
+	     params->format == LIBSSIG_FORMAT_XADES) &&
 	    !mime_type_valid(params->mime_type)) {
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
@@ -89,6 +94,12 @@ libssig_status libssig_sign(
 		return status;
 	}
 
+	if (params->format == LIBSSIG_FORMAT_JADES) {
+		return libssig_jades_sign(ctx, params, signature);
+	}
+	if (params->format == LIBSSIG_FORMAT_XADES) {
+		return libssig_xades_sign(ctx, params, signature);
+	}
 	if (params->format == LIBSSIG_FORMAT_PADES) {
 		return libssig_pades_sign(ctx, params, signature);
 	}
@@ -130,6 +141,47 @@ libssig_status libssig_sign(
 		if (status == LIBSSIG_OK) {
 			*signature = output;
 		}
+	}
+	return status;
+}
+
+libssig_status libssig_document_sign(
+    const libssig_context*     ctx,
+    const libssig_sign_params* params,
+    const libssig_signature*   input,
+    libssig_signature*         output
+) {
+	libssig_key_sign_params signing = {
+	    .token = params->token,
+	    .id = params->cert->id,
+	    .id_len = params->cert->id_len,
+	    .pin = params->pin,
+	    .pin_len = params->pin_len,
+	    .data = input->data,
+	    .data_len = input->len,
+	    .algo = params->algo,
+	    .hash = params->hash
+	};
+	libssig_status       status = libssig_session_sign(ctx, &signing, output);
+	const unsigned char* cursor = params->cert->der;
+	X509* cert = d2i_X509(NULL, &cursor, (long)params->cert->der_len);
+	if (status == LIBSSIG_OK &&
+	    (!cert || cursor != params->cert->der + params->cert->der_len ||
+	     !libssig_document_signature_check(
+	         cert,
+	         params->algo,
+	         params->hash,
+	         input->data,
+	         input->len,
+	         output
+	     ))) {
+		status = LIBSSIG_ERROR_VERIFY;
+	}
+	X509_free(cert);
+	if (status != LIBSSIG_OK) {
+		unsigned long rv = output->ck_rv;
+		libssig_signature_free(output);
+		output->ck_rv = rv;
 	}
 	return status;
 }

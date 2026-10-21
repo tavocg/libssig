@@ -46,12 +46,11 @@ typedef struct {
  * explícito usa un puntero no NULL con pin_len = 0.
  * options = 0 incorpora el contenido; SIGN_DETACHED genera firma separada.
  * Bits desconocidos devuelven ERROR_ARGUMENT.
- * Devuelve CMS/CAdES DER o un PDF firmado según format. Comprueba la firma
- * con la clave pública. B-B no valida confianza, vigencia ni revocación;
- * B-T valida la TSA y LT/LTA recogen evidencias con services.
- * PAdES exige PDF y rechaza SIGN_DETACHED.
- * No lee/escribe documentos ni abre conexiones: services aporta el transporte.
- * libmagic lee su base local si hace
+ * Devuelve CMS/CAdES DER, PDF, XML XAdES o JSON JAdES según format. Comprueba
+ * la firma con la clave pública. B-B no valida confianza, vigencia ni
+ * revocación; B-T valida la TSA y LT/LTA recogen evidencias con services. PAdES
+ * exige PDF y rechaza SIGN_DETACHED. No lee/escribe documentos ni abre
+ * conexiones: services aporta el transporte. libmagic lee su base local si hace
  * falta detectar MIME. Un fallo de detección devuelve LIBSSIG_ERROR_MAGIC.
  * signingTime en CAdES es la hora local
  * declarada; no es un sello de tiempo de una TSA.

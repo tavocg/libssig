@@ -1,7 +1,7 @@
-# CAdES and PAdES baseline profiles
+# AdES baseline profiles
 
 `libssig_sign_params.level` selects B-B, B-T, B-LT or B-LTA. Zero means B-LTA.
-`format` selects CAdES (default), PAdES, or basic CMS (B-B only).
+`format` selects CAdES (default), PAdES, XAdES, JAdES, or basic CMS (B-B only).
 An unavailable service, untrusted chain, revoked certificate, invalid response
 or missing validation material fails the operation with empty output; the
 library never silently saves a lower level.
@@ -13,10 +13,34 @@ library never silently saves a lower level.
 | B-LT | Certificate chains and OCSP/CRL in SignedData | Chains and OCSP/CRL in the PDF DSS |
 | B-LTA | ATSv3 with ATSHashIndexV3 | Document timestamp covering the DSS and preceding revisions |
 
-The implementation follows [ETSI EN 319 122-1](https://www.etsi.org/deliver/etsi_en/319100_319199/31912201/01.02.01_60/en_31912201v010201p.pdf)
+The implementation follows [ETSI EN 319 122-1](https://www.etsi.org/deliver/etsi_en/319100_319199/31912201/01.03.01_60/en_31912201v010301p.pdf)
 and [ETSI EN 319 142-1](https://www.etsi.org/deliver/etsi_en/319100_319199/31914201/01.02.01_60/en_31914201v010201p.pdf).
 National trust policies, qualified-signature status and legal acceptance are
 not inferred from the requested level.
+
+JAdES follows ETSI TS 119 182-1 v1.2.1; XAdES follows EN 319 132-1 v1.3.1.
+Both expose B-B/T/LT/LTA through the same sign, extend, timestamp and verify APIs.
+JAdES uses flattened JWS with base64url-encoded payload and `etsiU` entries;
+`iat` is signed, and `sigTst` covers the base64url signature value. Its archive
+input follows clause 5.3.6.2.3, including payload, protected header, signature
+and preceding encoded unsigned entries. XAdES uses an enveloping XMLDSig
+Signature, C14N 1.1, SignedProperties, SigningCertificateV2 and DataObjectFormat.
+Original bytes are stored in a base64 ds:Object. `SIGN_DETACHED` keeps them
+external, resolved only from the caller's content bytes. ArchiveTimeStamp uses
+the v1.4.1 namespace and the non-distributed computation in clause 5.5.2.3.
+AnyValidationData/anyValData carry document and TSA chains plus OCSP/CRL.
+No parser opens an external URI, file, schema or entity. Unsupported transforms,
+JWS serializations and qualifying properties fail explicitly.
+
+Documents are bounded to 32 MiB in these new formats, XML depth to 64 and nodes
+to 100000; unsigned JSON entries, certificates and revocation items to 1024.
+ECDSA JAdES uses the JOSE curve/hash pair (P-256/SHA-256, P-384/SHA-384,
+P-521/SHA-512). RSA-PSS uses matching MGF1 and a digest-length salt.
+
+All four formats support additional archive timestamps with freshly collected
+validation material for preceding TSAs. Renewal must run while those TSA chains
+can still be validated at the current time; no automated preservation scheduler
+or arbitrary historical time sliding is provided.
 
 ## Services and ownership
 
@@ -71,8 +95,10 @@ PDF changes use incremental revisions; the original byte ranges remain
 unchanged. Encrypted PDFs, certification permissions (/Perms), XFA, advanced
 CRL scopes/delta CRLs, and OCSP delegation requiring additional responder
 revocation proofs are rejected rather than treated as complete LT evidence.
-Adding a second signature to an already signed PDF, CMS countersignature augmentation and renewal of existing archive timestamps
-are not implemented. A PDF signature reserves 256 KiB for its CMS/token;
+Adding a second document signature to an already signed PDF and CMS
+countersignature augmentation are not implemented. Archive timestamps can be
+renewed in all four formats; the previous evidence and the latest TSA chain
+must still be verifiable when renewal runs. A PDF signature reserves 256 KiB for its CMS/token;
 exceeding that capacity fails explicitly.
 
 `libssig_verify()` recognizes PDF input and checks CMS signatures, signature

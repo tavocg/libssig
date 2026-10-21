@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "internal.h"
+#include <libssig/document.h>
 #include <openssl/ocsp.h>
 #include <openssl/x509v3.h>
 #include <stdint.h>
@@ -514,7 +515,7 @@ static libssig_status anchor_check(
 }
 
 static libssig_status signer_check(
-    CMS_SignerInfo*              s,
+    X509*                        cert,
     libssig_verify_signer*       signer,
     const libssig_verify_params* params,
     history_context*             ctx,
@@ -544,8 +545,6 @@ static libssig_status signer_check(
 		    sizeof(signer->validation_time)
 		);
 	}
-	X509* cert = NULL;
-	CMS_SignerInfo_get0_algs(s, NULL, &cert, NULL, NULL);
 	libssig_status status = store_load(params, false, &ctx->store);
 	if (status == LIBSSIG_OK) {
 		*chain_checked = true;
@@ -645,20 +644,24 @@ libssig_status libssig_validation_verify(
 		if (!historical && result->signers[i].level != LIBSSIG_LEVEL_B_LT) {
 			continue;
 		}
+		X509* cert = NULL;
+		CMS_SignerInfo_get0_algs(
+		    sk_CMS_SignerInfo_value(signers, (int)i),
+		    NULL,
+		    &cert,
+		    NULL,
+		    NULL
+		);
 		bool                   chain_checked = false;
-		libssig_status         checked = loaded == LIBSSIG_OK
-		                                     ? signer_check(
-                                           sk_CMS_SignerInfo_value(
-                                               signers,
-                                               (int)i
-                                           ),
-                                           &result->signers[i],
-                                           params,
-                                           &ctx,
-                                           &chain_checked,
-                                           historical
-                                       )
-		                                     : loaded;
+		libssig_status         checked = loaded == LIBSSIG_OK ? signer_check(
+                                                            cert,
+                                                            &result->signers[i],
+                                                            params,
+                                                            &ctx,
+                                                            &chain_checked,
+                                                            historical
+                                                        )
+		                                                      : loaded;
 		libssig_verify_signer* signer = &result->signers[i];
 		signer->history = !historical             ? LIBSSIG_HISTORY_NOT_CHECKED
 		                  : checked == LIBSSIG_OK ? LIBSSIG_HISTORY_VALID
@@ -695,4 +698,59 @@ libssig_status libssig_history_verify(
 	    true,
 	    result
 	);
+}
+
+libssig_status libssig_document_evidence_verify(
+    X509*                          cert,
+    const libssig_validation_data* evidence,
+    const libssig_verify_params*   params,
+    libssig_verify_result*         result,
+    bool                           historical
+) {
+	history_context ctx = {
+	    .certs = evidence->certs,
+	    .revocations = evidence->revocations
+	};
+	if (sk_X509_num(ctx.certs) > 1024 ||
+	    sk_ASN1_TYPE_num(ctx.revocations) > 1024) {
+		return LIBSSIG_ERROR_EVIDENCE;
+	}
+	bool                   checked = false;
+	libssig_verify_signer* signer = &result->signers[0];
+	libssig_status
+	    status = signer_check(cert, signer, params, &ctx, &checked, historical);
+	result->trust_checked = checked;
+	result->trusted = status == LIBSSIG_OK;
+	signer->history = !historical            ? LIBSSIG_HISTORY_NOT_CHECKED
+	                  : status == LIBSSIG_OK ? LIBSSIG_HISTORY_VALID
+	                  : status == LIBSSIG_ERROR_TRUST
+	                      ? LIBSSIG_HISTORY_UNTRUSTED
+	                  : status == LIBSSIG_ERROR_REVOKED
+	                      ? LIBSSIG_HISTORY_REVOKED
+	                      : LIBSSIG_HISTORY_INCOMPLETE;
+	return status;
+}
+
+libssig_status libssig_document_evidence_stamp_check(
+    const libssig_verify_timestamp* stamp,
+    const libssig_verify_timestamp* archive,
+    const libssig_validation_data*  evidence,
+    const libssig_verify_params*    params
+) {
+	history_context ctx = {
+	    .certs = evidence->certs,
+	    .revocations = evidence->revocations
+	};
+	if (!stamp->valid || !stamp->trusted ||
+	    !libssig_verify_time_parse(stamp->time, &ctx.at) ||
+	    !libssig_verify_time_parse(archive->time, &ctx.proof) ||
+	    ctx.at > ctx.proof) {
+		return LIBSSIG_ERROR_EVIDENCE;
+	}
+	libssig_status status = store_load(params, true, &ctx.store);
+	if (status == LIBSSIG_OK) {
+		status = tsa_chain(stamp, &ctx);
+	}
+	X509_STORE_free(ctx.store);
+	return status;
 }

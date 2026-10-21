@@ -1,4 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
+#include <libssig/document.h>
 #include <libssig/services.h>
 #include <libssig/trust.h>
 #include <libssig/validation.h>
@@ -631,6 +632,33 @@ libssig_status libssig_validation_collect(
 		if (status == LIBSSIG_OK) {
 			status = timestamp_collect(signer, services, data);
 		}
+		ASN1_OBJECT* archive_oid = OBJ_txt2obj(LIBSSIG_ARCHIVE_OID, 1);
+		int          pos = -1;
+		while (status == LIBSSIG_OK && archive_oid &&
+		       (pos = CMS_unsigned_get_attr_by_OBJ(signer, archive_oid, pos)) >=
+		           0) {
+			X509_ATTRIBUTE* attr = CMS_unsigned_get_attr(signer, pos);
+			for (int j = 0;
+			     status == LIBSSIG_OK && j < X509_ATTRIBUTE_count(attr);
+			     ++j) {
+				ASN1_TYPE* value = X509_ATTRIBUTE_get0_type(attr, j);
+				if (!value || value->type != V_ASN1_SEQUENCE) {
+					status = LIBSSIG_ERROR_TIMESTAMP;
+					break;
+				}
+				libssig_signature timestamp = {
+				    .data = (unsigned char*)
+				        ASN1_STRING_get0_data(value->value.sequence),
+				    .len = (size_t)ASN1_STRING_length(value->value.sequence)
+				};
+				status = libssig_validation_timestamp_collect(
+				    &timestamp,
+				    services,
+				    data
+				);
+			}
+		}
+		ASN1_OBJECT_free(archive_oid);
 	}
 	return status;
 }
@@ -674,5 +702,140 @@ libssig_status libssig_validation_tsa_certs(
 	}
 	sk_X509_free(signers);
 	libssig_validation_free(&data);
+	return status;
+}
+
+/* Certificate collection is independent of the document serialization. */
+libssig_status libssig_validation_document_collect(
+    X509*                        cert,
+    const libssig_signature*     timestamp,
+    const libssig_sign_services* services,
+    libssig_validation_data*     data
+) {
+	data->certs = sk_X509_new_null();
+	data->revocations = sk_ASN1_TYPE_new_null();
+	if (!data->certs || !data->revocations || !cert_add(data->certs, cert)) {
+		return LIBSSIG_ERROR_MEMORY;
+	}
+	libssig_verify_params doc = trust_params(services, false),
+	                      tsa = trust_params(services, true);
+	libssig_status status = bundle_add(
+	    data,
+	    doc.intermediates_data,
+	    doc.intermediates_data_len
+	);
+	if (status == LIBSSIG_OK) {
+		status = bundle_add(
+		    data,
+		    tsa.intermediates_data,
+		    tsa.intermediates_data_len
+		);
+	}
+	if (status == LIBSSIG_OK) {
+		status = bundle_add(data, doc.ca_data, doc.ca_data_len);
+	}
+	if (status == LIBSSIG_OK) {
+		status = bundle_add(data, tsa.ca_data, tsa.ca_data_len);
+	}
+	if (status == LIBSSIG_OK) {
+		status = chain_collect(cert, false, services, data);
+	}
+	if (status == LIBSSIG_OK) {
+		status = libssig_validation_timestamp_collect(
+		    timestamp,
+		    services,
+		    data
+		);
+	}
+	return status;
+}
+
+bool libssig_validation_revocation_read(
+    ASN1_TYPE*         item,
+    libssig_signature* bytes,
+    bool*              ocsp
+) {
+	*ocsp = item->type == V_ASN1_OTHER;
+	unsigned char*    encoded = NULL;
+	int               len = i2d_ASN1_TYPE(item, &encoded);
+	other_revocation* other = NULL;
+	if (*ocsp && len > 0) {
+		encoded[0] = 0x30;
+		const unsigned char* cursor = encoded;
+		other = d2i_other_revocation(NULL, &cursor, len);
+		OPENSSL_free(encoded);
+		encoded = NULL;
+		len = other ? i2d_ASN1_TYPE(other->value, &encoded) : 0;
+	}
+	bool ok = len > 0 && libssig_bytes_append(bytes, encoded, (size_t)len);
+	OPENSSL_free(encoded);
+	other_revocation_free(other);
+	return ok;
+}
+bool libssig_validation_revocation_add(
+    libssig_validation_data* data,
+    const unsigned char*     bytes,
+    size_t                   len,
+    bool                     ocsp
+) {
+	if (len > 16 * 1024 * 1024 || sk_ASN1_TYPE_num(data->revocations) >= 1024) {
+		return false;
+	}
+	if (ocsp) {
+		return revocation_add(data, bytes, len);
+	}
+	const unsigned char* cursor = bytes;
+	X509_CRL*            crl = d2i_X509_CRL(NULL, &cursor, (long)len);
+	bool                 ok = crl && cursor == bytes + len;
+	X509_CRL_free(crl);
+	if (!ok) {
+		return false;
+	}
+	cursor = bytes;
+	ASN1_TYPE* value = d2i_ASN1_TYPE(NULL, &cursor, (long)len);
+	if (value && sk_ASN1_TYPE_push(data->revocations, value)) {
+		return true;
+	}
+	ASN1_TYPE_free(value);
+	return false;
+}
+
+libssig_status libssig_validation_timestamp_collect(
+    const libssig_signature*     timestamp,
+    const libssig_sign_services* services,
+    libssig_validation_data*     data
+) {
+	libssig_status       status = LIBSSIG_OK;
+	const unsigned char* cursor = timestamp->data;
+	CMS_ContentInfo*     token = d2i_CMS_ContentInfo(
+        NULL,
+        &cursor,
+        (long)timestamp->len
+    );
+	STACK_OF(X509)* embedded = token ? CMS_get1_certs(token) : NULL;
+	if (status == LIBSSIG_OK) {
+		status = token && cursor == timestamp->data + timestamp->len
+		             ? libssig_verify_certs_append(data->certs, embedded)
+		             : LIBSSIG_ERROR_TIMESTAMP;
+	}
+	STACK_OF(CMS_SignerInfo)* signers = token ? CMS_get0_SignerInfos(token)
+	                                          : NULL;
+	X509* tsa_cert = NULL;
+	if (token && sk_CMS_SignerInfo_num(signers) == 1) {
+		CMS_set1_signers_certs(token, data->certs, 0);
+		CMS_SignerInfo_get0_algs(
+		    sk_CMS_SignerInfo_value(signers, 0),
+		    NULL,
+		    &tsa_cert,
+		    NULL,
+		    NULL
+		);
+	}
+	if (status == LIBSSIG_OK) {
+		status = tsa_cert ? chain_collect(tsa_cert, true, services, data)
+		                  : LIBSSIG_ERROR_TIMESTAMP;
+	}
+	sk_X509_pop_free(embedded, X509_free);
+	CMS_ContentInfo_free(token);
 	return status;
 }

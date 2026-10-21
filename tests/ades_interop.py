@@ -40,43 +40,48 @@ spec = PdfSignatureValidationSpec(SignatureValidationSpec(
     revinfo_gathering_policy=RevocationInfoGatheringSpec(
         online_fetching_rule=RevinfoOnlineFetchingRule.LOCAL_ONLY),
 ))
-with (root / 'pades-level-3.pdf').open('rb') as file:
-    reader = PdfFileReader(file)
-    result = asyncio.run(ades_lta_validation(reader.embedded_signatures[0], spec))
-    assert result.ades_subindic.name == 'OK', result
-    assert result.oldest_evidence_record_timestamp is not None, result
-    assert result.api_status.intact and result.api_status.valid and result.api_status.docmdp_ok
-    print('PAdES: pyHanko AdESPassed.OK with a verified evidence-record timestamp')
+for filename in ['pades-level-3.pdf', 'pades-renewed.pdf']:
+    with (root / filename).open('rb') as file:
+        reader = PdfFileReader(file)
+        result = asyncio.run(ades_lta_validation(reader.embedded_signatures[0], spec))
+        assert result.ades_subindic.name == 'OK', result
+        assert result.oldest_evidence_record_timestamp is not None, result
+        assert result.api_status.intact and result.api_status.valid and result.api_status.docmdp_ok
+        print('PAdES: pyHanko AdESPassed.OK with a verified evidence-record timestamp')
+for filename in ['ades-level-3.p7m', 'ades-renewed.p7m']:
+    signed = cms.ContentInfo.load((root / filename).read_bytes())['content']
+    signer = signed['signer_infos'][0]
+    def covered_attributes(attr):
+        token = cms.ContentInfo.load(attr['values'][0].dump())
+        index_attr = next(a for a in token['content']['signer_infos'][0]['unsigned_attrs'] if a['type'].dotted == '0.4.0.19122.1.5')
+        return len(HashIndex.load(index_attr['values'][0].dump())['attributes'])
+    archive_attr = max((a for a in signer['unsigned_attrs'] if a['type'].dotted == '0.4.0.1733.2.4'), key=covered_attributes)
+    token = cms.ContentInfo.load(archive_attr['values'][0].dump())
+    index_attr = next(a for a in token['content']['signer_infos'][0]['unsigned_attrs']
+                      if a['type'].dotted == '0.4.0.19122.1.5')
+    index_der = index_attr['values'][0].dump()
+    index = HashIndex.load(index_der)
+    algorithm = index['algorithm']['algorithm'].native
 
-signed = cms.ContentInfo.load((root / 'ades-level-3.p7m').read_bytes())['content']
-signer = signed['signer_infos'][0]
-archive_attr = next(a for a in signer['unsigned_attrs'] if a['type'].dotted == '0.4.0.1733.2.4')
-token = cms.ContentInfo.load(archive_attr['values'][0].dump())
-index_attr = next(a for a in token['content']['signer_infos'][0]['unsigned_attrs']
-                  if a['type'].dotted == '0.4.0.19122.1.5')
-index_der = index_attr['values'][0].dump()
-index = HashIndex.load(index_der)
-algorithm = index['algorithm']['algorithm'].native
+    def digest(data):
+        return hashlib.new(algorithm, data).digest()
 
-def digest(data):
-    return hashlib.new(algorithm, data).digest()
-
-assert sorted(index['certs'].native) == sorted(digest(c.dump()) for c in signed['certificates'])
-assert sorted(index['revocations'].native) == sorted(digest(c.dump()) for c in signed['crls'])
-assert sorted(index['attributes'].native) == sorted(
-    digest(a['type'].dump() + value.dump())
-    for a in signer['unsigned_attrs'] if a is not archive_attr
-    for value in a['values']
-)
-content = signed['encap_content_info']['content'].native
-imprint_input = signed['encap_content_info']['content_type'].dump() + digest(content)
-for field in ['version', 'sid', 'digest_algorithm', 'signed_attrs', 'signature_algorithm', 'signature']:
-    imprint_input += signer[field].dump()
-imprint_input += index_der
-with tempfile.TemporaryDirectory(prefix='libssig-ats-interop-') as directory:
-    path = Path(directory) / 'archive.der'
-    path.write_bytes(token.dump())
-    subprocess.run(['openssl', 'ts', '-verify', '-token_in', '-in', str(path),
-                    '-digest', digest(imprint_input).hex(),
-                    '-CAfile', str(root / 'ades-tsa-root.pem')], check=True)
-print('CAdES ATSv3: independent hash-index/imprint calculation and OpenSSL verification passed')
+    assert sorted(index['certs'].native) == sorted(digest(c.dump()) for c in signed['certificates'])
+    assert sorted(index['revocations'].native) == sorted(digest(c.dump()) for c in signed['crls'])
+    assert sorted(index['attributes'].native) == sorted(
+        digest(a['type'].dump() + value.dump())
+        for a in signer['unsigned_attrs'] if a is not archive_attr
+        for value in a['values']
+    )
+    content = signed['encap_content_info']['content'].native
+    imprint_input = signed['encap_content_info']['content_type'].dump() + digest(content)
+    for field in ['version', 'sid', 'digest_algorithm', 'signed_attrs', 'signature_algorithm', 'signature']:
+        imprint_input += signer[field].dump()
+    imprint_input += index_der
+    with tempfile.TemporaryDirectory(prefix='libssig-ats-interop-') as directory:
+        path = Path(directory) / 'archive.der'
+        path.write_bytes(token.dump())
+        subprocess.run(['openssl', 'ts', '-verify', '-token_in', '-in', str(path),
+                        '-digest', digest(imprint_input).hex(),
+                        '-CAfile', str(root / 'ades-tsa-root.pem')], check=True)
+    print('CAdES ATSv3: independent hash-index/imprint calculation and OpenSSL verification passed')

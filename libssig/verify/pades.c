@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "internal.h"
+#include <libssig/document.h>
 #include <libssig/pdf.h>
 #include <limits.h>
 #include <openssl/pem.h>
@@ -267,18 +268,25 @@ static libssig_status pdf_validation(
 	qpdf_oh form = qpdf_oh_get_key(pdf, qpdf_get_root(pdf), "/AcroForm");
 	qpdf_oh fields = qpdf_oh_get_key_if_dict(pdf, form, "/Fields");
 	if (result->count != 1 ||
-	    qpdf_oh_get_array_n_items(pdf, fields) != (historical ? 2 : 1)) {
+	    (historical ? (qpdf_oh_get_array_n_items(pdf, fields) < 2 ||
+	                   qpdf_oh_get_array_n_items(pdf, fields) > 1024)
+	                : qpdf_oh_get_array_n_items(pdf, fields) != 1)) {
 		return LIBSSIG_ERROR_EVIDENCE;
 	}
 	libssig_pdf_signature document = {0}, archive = {0};
 	qpdf_oh               first = qpdf_oh_get_array_item(pdf, fields, 0);
-	qpdf_oh last = historical ? qpdf_oh_get_array_item(pdf, fields, 1) : 0;
-	libssig_status status = libssig_pdf_signature_read(
-	    pdf,
-	    qpdf_oh_get_key(pdf, first, "/V"),
-	    params,
-	    &document
-	);
+	qpdf_oh               last = historical ? qpdf_oh_get_array_item(
+                                    pdf,
+                                    fields,
+                                    qpdf_oh_get_array_n_items(pdf, fields) - 1
+                                )
+	                                        : 0;
+	libssig_status        status = libssig_pdf_signature_read(
+        pdf,
+        qpdf_oh_get_key(pdf, first, "/V"),
+        params,
+        &document
+    );
 	if (status == LIBSSIG_OK && historical) {
 		status = libssig_pdf_signature_read(
 		    pdf,
@@ -340,6 +348,47 @@ static libssig_status pdf_validation(
 			    historical,
 			    result
 			);
+		}
+
+		if (status == LIBSSIG_OK && historical) {
+			libssig_validation_data evidence = {
+			    .certs = protected_certs,
+			    .revocations = revocations
+			};
+			size_t previous = document.end;
+			for (int i = 1; status == LIBSSIG_OK &&
+			                i + 1 < qpdf_oh_get_array_n_items(pdf, fields);
+			     ++i) {
+				qpdf_oh field = qpdf_oh_get_array_item(pdf, fields, i);
+				libssig_pdf_signature old = {0};
+				status = libssig_pdf_signature_read(
+				    pdf,
+				    qpdf_oh_get_key_if_dict(pdf, field, "/V"),
+				    params,
+				    &old
+				);
+				if (status == LIBSSIG_OK &&
+				    (!old.timestamp || old.end <= previous ||
+				     old.end > archive.hole_start)) {
+					status = LIBSSIG_ERROR_EVIDENCE;
+				}
+				libssig_verify_timestamp stamp = {0};
+				if (status == LIBSSIG_OK) {
+					status = document_stamp(&old, params, &stamp);
+				}
+				if (status == LIBSSIG_OK) {
+					status = libssig_document_evidence_stamp_check(
+					    &stamp,
+					    &result->signers[0].archive,
+					    &evidence,
+					    params
+					);
+				}
+				previous = old.end;
+				free(stamp.cert_der);
+				libssig_signature_free(&old.cms);
+				libssig_signature_free(&old.content);
+			}
 		}
 		sk_X509_pop_free(protected_certs, X509_free);
 		BIO_free(pem);

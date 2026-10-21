@@ -166,7 +166,10 @@ static int lt_revoked_check(
 	return 0;
 }
 
-int main(int argc, char** argv) {
+#ifndef LIBSSIG_ADES_FIXTURE_MAIN
+#define LIBSSIG_ADES_FIXTURE_MAIN main
+#endif
+int LIBSSIG_ADES_FIXTURE_MAIN(int argc, char** argv) {
 	CHECK(argc == 2);
 	directory = argv[1];
 	root_key = EVP_PKEY_Q_keygen(NULL, NULL, "RSA", 2048);
@@ -314,6 +317,29 @@ int main(int argc, char** argv) {
 			OPENSSL_free(tampered);
 			libssig_raw_cms_free(raw);
 		}
+
+		if (i == 3) {
+			libssig_extend_params renew = params;
+			renew.data = output.data;
+			renew.data_len = output.len;
+			libssig_signature renewed = {0};
+			libssig_status    renewed_status = libssig_extend(&renew, &renewed);
+			if (renewed_status != LIBSSIG_OK) {
+				fprintf(stderr, "CAdES renewal status=%d\n", renewed_status);
+			}
+			CHECK(renewed_status == LIBSSIG_OK);
+			libssig_verify_params checked = trust;
+			checked.data = renewed.data;
+			checked.data_len = renewed.len;
+			libssig_verify_result renewed_result = {0};
+			CHECK(libssig_verify(&checked, &renewed_result) == LIBSSIG_OK);
+			CHECK(renewed_result.signers[0].level_validated);
+			CHECK(
+			    file_write("ades-renewed.p7m", renewed.data, renewed.len) == 0
+			);
+			libssig_verify_free(&renewed_result);
+			libssig_signature_free(&renewed);
+		}
 		char name[64];
 		snprintf(name, sizeof(name), "ades-level-%zu.p7m", i);
 		CHECK(file_write(name, output.data, output.len) == 0);
@@ -411,6 +437,33 @@ int main(int argc, char** argv) {
 			    result.signers[0].history == LIBSSIG_HISTORY_INCOMPLETE
 			);
 			free(unsigned_revision);
+		}
+
+		if (i == 3) {
+			libssig_extend_params renew = p;
+			renew.data = output.data;
+			renew.data_len = output.len;
+			libssig_signature renewed = {0};
+			libssig_status    renewed_status = libssig_extend(&renew, &renewed);
+			if (renewed_status != LIBSSIG_OK) {
+				fprintf(stderr, "PAdES renewal status=%d\n", renewed_status);
+			}
+			CHECK(renewed_status == LIBSSIG_OK);
+			CHECK(
+			    renewed.len > output.len &&
+			    !memcmp(renewed.data, output.data, output.len)
+			);
+			libssig_verify_params checked = trust;
+			checked.data = renewed.data;
+			checked.data_len = renewed.len;
+			libssig_verify_result renewed_result = {0};
+			CHECK(libssig_verify(&checked, &renewed_result) == LIBSSIG_OK);
+			CHECK(renewed_result.signers[0].level_validated);
+			CHECK(
+			    file_write("pades-renewed.pdf", renewed.data, renewed.len) == 0
+			);
+			libssig_verify_free(&renewed_result);
+			libssig_signature_free(&renewed);
 		}
 		char name[64];
 		snprintf(name, sizeof(name), "pades-level-%zu.pdf", i);

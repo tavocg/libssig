@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "internal.h"
+#include <libssig/document.h>
 #include <limits.h>
 #include <stdlib.h>
 
@@ -112,6 +113,14 @@ libssig_status libssig_timestamp(
 	*signature = (libssig_signature){0};
 	if (!params_valid(params)) {
 		return LIBSSIG_ERROR_ARGUMENT;
+	}
+
+	libssig_format format = libssig_document_format(
+	    params->data,
+	    params->data_len
+	);
+	if (format == LIBSSIG_FORMAT_JADES || format == LIBSSIG_FORMAT_XADES) {
+		return libssig_document_timestamp(params, signature);
 	}
 
 	CMS_ContentInfo* cms = NULL;

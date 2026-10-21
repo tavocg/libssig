@@ -8,10 +8,10 @@
 extern "C" {
 #endif
 
-/* Extend CAdES or a single-signature PDF without accessing a token. content is
- * required for detached signatures. B-LTA is the zero/default level; missing
- * services fail explicitly. Output is empty on failure. Existing signatures are
- * never downgraded. */
+/* Extend CAdES, JAdES, XAdES or a single-signature PDF without accessing a
+ * token. content is required for detached signatures. B-LTA is the zero/default
+ * level; missing services fail explicitly. Output is empty on failure. Existing
+ * signatures are never downgraded. */
 typedef struct {
 	const unsigned char*         data;
 	size_t                       data_len;

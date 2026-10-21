@@ -12,9 +12,10 @@ typedef enum {
 	LIBSSIG_TIMESTAMP_SYSTEM_TRUST = 1u << 0,
 } libssig_timestamp_options;
 
-/* Contenedor CAdES DER; signer_index identifica al firmante en esta entrada.
- * hash = 0 usa SHA-256 para el sello, independientemente de la firma original.
- * policy_oid opcional: OID numérico de la política exigida a la TSA. */
+/* Contenedor CAdES DER, JAdES JSON o XAdES XML; signer_index identifica al
+ * firmante en esta entrada. hash = 0 usa SHA-256 para el sello,
+ * independientemente de la firma original. policy_oid opcional: OID numérico de
+ * la política exigida a la TSA. */
 typedef struct {
 	const unsigned char* data;
 
@@ -58,7 +59,7 @@ typedef struct {
 
 /* Valida respuesta RFC 3161 contra solicitud y firma, nonce, política,
  * firma TSA, ESS, EKU timeStamping y confianza. Exige ca_data o SYSTEM_TRUST.
- * Incorpora el token como atributo no firmado signature-time-stamp.
+ * Incorpora el token en signature-time-stamp, sigTst o SignatureTimeStamp.
  * Rechaza genTime a más de 300 segundos en el futuro. Valida la cadena TSA
  * a la hora actual; no consulta revocación ni establece validación histórica.
  * ERROR_TIMESTAMP indica respuesta no concedida; ERROR_TRUST, cadena TSA

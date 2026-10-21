@@ -63,4 +63,8 @@ libssig_status libssig_pdf_signature_read(
     libssig_pdf_signature*       signature
 );
 
+libssig_status libssig_pdf_archive(
+    const libssig_sign_params* params,
+    libssig_signature*         output
+);
 #endif

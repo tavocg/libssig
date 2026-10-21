@@ -22,6 +22,8 @@ find_package(PkgConfig REQUIRED)
 find_package(OpenSSL 3.0 REQUIRED COMPONENTS Crypto)
 pkg_check_modules(P11_KIT REQUIRED IMPORTED_TARGET p11-kit-1)
 pkg_check_modules(MAGIC REQUIRED IMPORTED_TARGET libmagic)
+pkg_check_modules(JANSSON REQUIRED IMPORTED_TARGET jansson)
+pkg_check_modules(XML2 REQUIRED IMPORTED_TARGET libxml-2.0)
 find_path(QPDF_INCLUDE_DIR qpdf/qpdf-c.h)
 find_library(QPDF_LIBRARY qpdf)
 if(NOT QPDF_INCLUDE_DIR OR NOT QPDF_LIBRARY)
@@ -39,6 +41,8 @@ add_library(libssig::ssig ALIAS ssig)
 target_link_libraries(ssig PRIVATE
     PkgConfig::P11_KIT
     PkgConfig::MAGIC
+    PkgConfig::JANSSON
+    PkgConfig::XML2
     OpenSSL::Crypto
     ${QPDF_LIBRARY}
 )

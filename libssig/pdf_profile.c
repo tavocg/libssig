@@ -35,7 +35,7 @@ static libssig_status pdf_validation(
 	libssig_validation_free(&validation);
 	return status;
 }
-static libssig_status pdf_archive(
+libssig_status libssig_pdf_archive(
     const libssig_sign_params* params,
     libssig_signature*         pdf
 ) {
@@ -112,7 +112,7 @@ libssig_status libssig_pades_finish(
 		status = pdf_validation(params, cms, output);
 	}
 	if (status == LIBSSIG_OK && params->level == LIBSSIG_LEVEL_B_LTA) {
-		status = pdf_archive(params, output);
+		status = libssig_pdf_archive(params, output);
 	}
 	return status;
 }

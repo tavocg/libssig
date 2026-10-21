@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "internal.h"
+#include <libssig/document.h>
 #include <limits.h>
 #include <openssl/cms.h>
 #include <openssl/cmserr.h>
@@ -403,6 +404,12 @@ libssig_status libssig_verify(
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
 
+	libssig_format format = libssig_document_format(params->data, params->data_len);
+ if (format == LIBSSIG_FORMAT_JADES || format == LIBSSIG_FORMAT_XADES) {
+  libssig_status status = format == LIBSSIG_FORMAT_JADES ? libssig_jades_verify(params, result) : libssig_xades_verify(params, result);
+  if (status != LIBSSIG_OK && status != LIBSSIG_ERROR_TRUST && status != LIBSSIG_ERROR_TIMESTAMP && status != LIBSSIG_ERROR_OCSP && status != LIBSSIG_ERROR_REVOKED && status != LIBSSIG_ERROR_EVIDENCE) libssig_verify_free(result);
+  return status;
+ }
 	if (params->data_len >= 5 && !memcmp(params->data, "%PDF-", 5)) {
 		libssig_status status = libssig_pades_verify(params, result);
 		libssig_verify_profiles_finish(status, result);

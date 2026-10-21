@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "internal.h"
+#include <libssig/document.h>
 #include <limits.h>
 #include <stdlib.h>
 #include <string.h>
@@ -80,6 +81,16 @@ libssig_status libssig_extend(
 	      !params->services->tsa_url))) {
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
+	libssig_format format = libssig_document_format(
+	    params->data,
+	    params->data_len
+	);
+	if (format == LIBSSIG_FORMAT_JADES) {
+		return libssig_jades_extend(params, output);
+	}
+	if (format == LIBSSIG_FORMAT_XADES) {
+		return libssig_xades_extend(params, output);
+	}
 	if (params->data_len >= 5 && !memcmp(params->data, "%PDF-", 5)) {
 		return libssig_pades_extend(params, output);
 	}
@@ -102,7 +113,6 @@ libssig_status libssig_extend(
 	}
 	if (status == LIBSSIG_OK && params->level != LIBSSIG_LEVEL_B_B) {
 		const char* unsupported[] = {
-		    LIBSSIG_ARCHIVE_OID,
 		    "1.2.840.113549.1.9.16.2.27",
 		    "1.2.840.113549.1.9.16.2.48",
 		    "0.4.0.1733.2.2",
