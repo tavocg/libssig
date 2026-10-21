@@ -82,3 +82,5 @@ carry the corresponding edition prefix as well. Shared CMS/RFC 3161, cryptograph
 trust, revocation, byte and transport services remain independent of this naming.
 Public functions remain `libssig_sign`, `libssig_extend`, `libssig_verify` and
 the timestamp APIs. Public version-selection masks are not implemented yet.
+
+The unimplemented selector design is available in [the workflow proposal](workflows.md) for review.
