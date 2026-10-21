@@ -2,7 +2,7 @@
 #ifndef LIBSSIG_CERTIFICATES_CERTIFICATES_H
 #define LIBSSIG_CERTIFICATES_CERTIFICATES_H
 
-#include <libssig/tokens/tokens.h>
+#include <libssig/tokens.h>
 
 #ifdef __cplusplus
 extern "C" {

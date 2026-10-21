@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-#include <libssig/context/context.h>
+#include <libssig/context.h>
 #include <libssig/session.h>
 #include <stdlib.h>
 

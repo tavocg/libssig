@@ -46,7 +46,7 @@ add_test(NAME version COMMAND version_test)
 
 # Compile the implementation with a simulated module loader for lifecycle checks.
 add_executable(context_test context_test.c
-    ../libssig/context/context.c ../libssig/tokens/tokens.c
+    ../libssig/context.c ../libssig/tokens.c
     ../libssig/certificates/certificates.c ../libssig/certificates/metadata.c ../libssig/session.c)
 target_include_directories(context_test PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(context_test PRIVATE PkgConfig::P11_KIT OpenSSL::Crypto)

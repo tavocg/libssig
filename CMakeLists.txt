@@ -73,10 +73,11 @@ install(TARGETS ssig
 )
 
 install(FILES libssig/libssig.h libssig/types.h libssig/version.h
+    libssig/context.h libssig/tokens.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libssig
 )
 
-foreach(feature context tokens certificates sign extend verify timestamp ocsp)
+foreach(feature certificates sign extend verify timestamp ocsp)
     install(FILES libssig/${feature}/${feature}.h
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libssig/${feature}
     )

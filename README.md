@@ -82,10 +82,11 @@ See [OCSP](doc/ocsp.md).
 
 ## Source layout
 
-Each public feature lives in `libssig/<feature>/`, with its interface in
-`<feature>.h` and private helpers beside it. Shared implementation lives directly
-in `libssig/`; versioning also stays there. `libssig/libssig.h` includes every
-public interface. Only public headers are installed.
+Features with multiple implementation files live in `libssig/<feature>/`,
+with their interface in `<feature>.h` and private helpers beside it. Features
+that only need a `.c`/`.h` pair, such as context and tokens, live directly in
+`libssig/`, alongside shared implementation and versioning. `libssig/libssig.h`
+includes every public interface. Only public headers are installed.
 
 ## Build
 

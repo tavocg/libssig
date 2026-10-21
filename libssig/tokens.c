@@ -8,7 +8,7 @@
  */
 
 #include <libssig/session.h>
-#include <libssig/tokens/tokens.h>
+#include <libssig/tokens.h>
 #include <limits.h>
 #include <p11-kit/p11-kit.h>
 #include <p11-kit/uri.h>

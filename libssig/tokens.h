@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-#ifndef LIBSSIG_TOKENS_TOKENS_H
-#define LIBSSIG_TOKENS_TOKENS_H
+#ifndef LIBSSIG_TOKENS_H
+#define LIBSSIG_TOKENS_H
 
-#include <libssig/context/context.h>
+#include <libssig/context.h>
 
 #ifdef __cplusplus
 extern "C" {

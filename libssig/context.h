@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-#ifndef LIBSSIG_CONTEXT_CONTEXT_H
-#define LIBSSIG_CONTEXT_CONTEXT_H
+#ifndef LIBSSIG_CONTEXT_H
+#define LIBSSIG_CONTEXT_H
 
 #include <libssig/types.h>
 
