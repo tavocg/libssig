@@ -7,13 +7,17 @@
 #include <libssig/services.h>
 #include <libssig/validation.h>
 
-libssig_status libssig_archive_apply(
+libssig_status libssig_cades_v131_archive_apply(
     CMS_ContentInfo**            cms,
     const libssig_extend_params* params
 );
-libssig_status libssig_pades_extend(
+libssig_status libssig_pades_v121_extend(
     const libssig_extend_params* params,
     libssig_signature*           output
 );
 
+libssig_status libssig_cades_v131_extend(
+    const libssig_extend_params* params,
+    libssig_signature*           output
+);
 #endif

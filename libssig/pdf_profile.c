@@ -101,7 +101,7 @@ libssig_status libssig_pdf_archive(
 	libssig_pdf_close(&revision);
 	return status;
 }
-libssig_status libssig_pades_finish(
+libssig_status libssig_pades_v121_finish(
     const libssig_sign_params* params,
     CMS_ContentInfo*           cms,
     libssig_signature*         output

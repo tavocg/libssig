@@ -37,7 +37,7 @@ static xmlNode* reference_add(
 		ok = ok && method &&
 		     xmlNewProp(method, BAD_CAST "Algorithm", BAD_CAST transform);
 	}
-	return ok && libssig_xades_digest_node(ref, bytes, hash) ? ref : NULL;
+	return ok && libssig_xades_v131_digest_node(ref, bytes, hash) ? ref : NULL;
 }
 static bool properties_add(
     libssig_xades*             doc,
@@ -89,7 +89,7 @@ static bool properties_add(
 	    .data = params->cert->der,
 	    .len = params->cert->der_len
 	};
-	ok = ok && libssig_xades_digest_node(digest, &der, params->hash);
+	ok = ok && libssig_xades_v131_digest_node(digest, &der, params->hash);
 	xmlNode* objects = libssig_xml_add(
 	    doc->properties,
 	    LIBSSIG_XADES132,
@@ -167,7 +167,7 @@ static bool tree_create(
 	     xmlNewProp(
 	         method,
 	         BAD_CAST "Algorithm",
-	         BAD_CAST libssig_xades_algo_uri(params->algo, params->hash)
+	         BAD_CAST libssig_xades_v131_algo_uri(params->algo, params->hash)
 	     );
 	doc->signature_value = libssig_xml_add(
 	    doc->root,
@@ -251,7 +251,7 @@ static bool tree_create(
 	libssig_signature_free(&props);
 	return ok;
 }
-libssig_status libssig_xades_sign(
+libssig_status libssig_xades_v131_sign(
     const libssig_context*     ctx,
     const libssig_sign_params* params,
     libssig_signature*         output
@@ -304,7 +304,7 @@ libssig_status libssig_xades_sign(
 		         .hash = params->hash,
 		         .services = params->services
         };
-		status = libssig_xades_extend(&extend, output);
+		status = libssig_xades_v131_extend(&extend, output);
 	} else if (status == LIBSSIG_OK) {
 		*output = baseline;
 		baseline = (libssig_signature){0};
@@ -315,6 +315,6 @@ libssig_status libssig_xades_sign(
 	}
 	libssig_signature_free(&raw);
 	libssig_signature_free(&baseline);
-	libssig_xades_free(&doc);
+	libssig_xades_v131_free(&doc);
 	return status;
 }

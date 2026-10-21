@@ -22,25 +22,29 @@ ASN1_SEQUENCE(libssig_raw_signed_data) =
                 ),
 } ASN1_SEQUENCE_END(libssig_raw_cms) IMPLEMENT_ASN1_FUNCTIONS(libssig_raw_cms)
 
-                ASN1_SEQUENCE(libssig_hash_index) =
+                ASN1_SEQUENCE(libssig_cades_v131_hash_index) =
                     {
-                        ASN1_SIMPLE(libssig_hash_index, algorithm, X509_ALGOR),
+                        ASN1_SIMPLE(
+                            libssig_cades_v131_hash_index,
+                            algorithm,
+                            X509_ALGOR
+                        ),
                         ASN1_SEQUENCE_OF(
-                            libssig_hash_index,
+                            libssig_cades_v131_hash_index,
                             certs,
                             ASN1_OCTET_STRING
                         ),
                         ASN1_SEQUENCE_OF(
-                            libssig_hash_index,
+                            libssig_cades_v131_hash_index,
                             revocations,
                             ASN1_OCTET_STRING
                         ),
                         ASN1_SEQUENCE_OF(
-                            libssig_hash_index,
+                            libssig_cades_v131_hash_index,
                             attributes,
                             ASN1_OCTET_STRING
                         ),
-} ASN1_SEQUENCE_END(libssig_hash_index) IMPLEMENT_ASN1_FUNCTIONS(libssig_hash_index)
+} ASN1_SEQUENCE_END(libssig_cades_v131_hash_index) IMPLEMENT_ASN1_FUNCTIONS(libssig_cades_v131_hash_index)
 
                         libssig_raw_cms
                     * libssig_cms_decode(CMS_ContentInfo * cms) {
@@ -161,12 +165,12 @@ static bool index_values(
 	}
 	return true;
 }
-libssig_hash_index* libssig_archive_index(
+libssig_cades_v131_hash_index* libssig_cades_v131_archive_index(
     libssig_raw_cms* raw,
     CMS_SignerInfo*  signer,
     const EVP_MD*    md
 ) {
-	libssig_hash_index* index = libssig_hash_index_new();
+	libssig_cades_v131_hash_index* index = libssig_cades_v131_hash_index_new();
 	if (!index) {
 		return NULL;
 	}
@@ -198,7 +202,7 @@ libssig_hash_index* libssig_archive_index(
 		OPENSSL_free(oid);
 	}
 	if (!ok) {
-		libssig_hash_index_free(index);
+		libssig_cades_v131_hash_index_free(index);
 		index = NULL;
 	}
 	return index;
@@ -239,7 +243,7 @@ static bool signer_hash(EVP_MD_CTX* ctx, ASN1_TYPE* signer) {
 	OPENSSL_free(bytes);
 	return ok;
 }
-bool libssig_archive_imprint(
+bool libssig_cades_v131_archive_imprint(
     CMS_ContentInfo*             cms,
     libssig_raw_cms*             raw,
     size_t                       index,
@@ -292,7 +296,7 @@ bool libssig_level_valid(libssig_level level) {
 	return level == LIBSSIG_LEVEL_B_B || level == LIBSSIG_LEVEL_B_T ||
 	       level == LIBSSIG_LEVEL_B_LT || level == LIBSSIG_LEVEL_B_LTA;
 }
-libssig_status libssig_ades_encode(
+libssig_status libssig_cms_encode(
     CMS_ContentInfo*   cms,
     libssig_signature* output
 ) {

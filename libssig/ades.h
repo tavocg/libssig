@@ -32,21 +32,21 @@ typedef struct {
 	STACK_OF(ASN1_OCTET_STRING) * certs;
 	STACK_OF(ASN1_OCTET_STRING) * revocations;
 	STACK_OF(ASN1_OCTET_STRING) * attributes;
-} libssig_hash_index;
-DECLARE_ASN1_FUNCTIONS(libssig_hash_index)
+} libssig_cades_v131_hash_index;
+DECLARE_ASN1_FUNCTIONS(libssig_cades_v131_hash_index)
 
 typedef struct {
 	STACK_OF(X509) * certs;
 	STACK_OF(ASN1_TYPE) * revocations;
 } libssig_validation_data;
 
-libssig_raw_cms*    libssig_cms_decode(CMS_ContentInfo* cms);
-libssig_hash_index* libssig_archive_index(
+libssig_raw_cms*               libssig_cms_decode(CMS_ContentInfo* cms);
+libssig_cades_v131_hash_index* libssig_cades_v131_archive_index(
     libssig_raw_cms* raw,
     CMS_SignerInfo*  signer,
     const EVP_MD*    md
 );
-bool libssig_archive_imprint(
+bool libssig_cades_v131_archive_imprint(
     CMS_ContentInfo*             cms,
     libssig_raw_cms*             raw,
     size_t                       index,
@@ -61,7 +61,7 @@ libssig_status libssig_validation_embed(
     const libssig_validation_data* data
 );
 bool           libssig_level_valid(libssig_level level);
-libssig_status libssig_ades_encode(
+libssig_status libssig_cms_encode(
     CMS_ContentInfo*   cms,
     libssig_signature* output
 );

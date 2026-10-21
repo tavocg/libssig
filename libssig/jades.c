@@ -3,7 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-void libssig_jades_free(libssig_jades* doc) {
+void libssig_jades_v121_free(libssig_jades* doc) {
 	json_decref(doc->root);
 	json_decref(doc->protected);
 	free(doc->payload);
@@ -12,7 +12,7 @@ void libssig_jades_free(libssig_jades* doc) {
 	libssig_validation_free(&doc->evidence);
 	*doc = (libssig_jades){0};
 }
-bool libssig_jades_write(json_t* value, libssig_signature* bytes) {
+bool libssig_jades_v121_write(json_t* value, libssig_signature* bytes) {
 	char* text = value ? json_dumps(value, JSON_COMPACT | JSON_ENSURE_ASCII)
 	                   : NULL;
 	bool  ok = text && libssig_bytes_append(bytes, text, strlen(text));
@@ -24,13 +24,13 @@ static const char* algs[3][3] = {
     {"PS256", "PS384", "PS512"},
     {"ES256", "ES384", "ES512"}
 };
-const char* libssig_jades_alg_name(libssig_algo algo, libssig_hash hash) {
+const char* libssig_jades_v121_alg_name(libssig_algo algo, libssig_hash hash) {
 	return algo >= 0 && algo <= LIBSSIG_ALGO_ECDSA && hash >= 0 &&
 	               hash <= LIBSSIG_HASH_SHA512
 	           ? algs[algo][hash]
 	           : NULL;
 }
-libssig_status libssig_jades_alg(
+libssig_status libssig_jades_v121_alg(
     const char*   name,
     X509*         cert,
     libssig_algo* algo,
@@ -67,7 +67,7 @@ libssig_status libssig_jades_alg(
 	}
 	return LIBSSIG_ERROR_UNSUPPORTED;
 }
-json_t* libssig_jades_item(json_t* value) {
+json_t* libssig_jades_v121_item(json_t* value) {
 	const char*       text = json_string_value(value);
 	libssig_signature bytes = {0};
 	if (!text ||
@@ -83,9 +83,9 @@ json_t* libssig_jades_item(json_t* value) {
 	libssig_signature_free(&bytes);
 	return item;
 }
-bool libssig_jades_add(libssig_jades* doc, json_t* value) {
+bool libssig_jades_v121_add(libssig_jades* doc, json_t* value) {
 	libssig_signature bytes = {0};
-	bool              ok = libssig_jades_write(value, &bytes);
+	bool              ok = libssig_jades_v121_write(value, &bytes);
 	char*   text = ok ? libssig_base64(bytes.data, bytes.len, true) : NULL;
 	json_t* encoded = text ? json_string(text) : NULL;
 	ok = encoded && json_array_append(doc->unsigned_items, encoded) == 0;
@@ -95,23 +95,29 @@ bool libssig_jades_add(libssig_jades* doc, json_t* value) {
 	libssig_signature_free(&bytes);
 	return ok;
 }
-json_t* libssig_jades_pki(const libssig_signature* bytes) {
+json_t* libssig_jades_v121_pki(const libssig_signature* bytes) {
 	char*   text = libssig_base64(bytes->data, bytes->len, false);
 	json_t* value = text ? json_pack("{s:s}", "val", text) : NULL;
 	free(text);
 	return value;
 }
-bool libssig_jades_pki_read(json_t* value, libssig_signature* bytes) {
+bool libssig_jades_v121_pki_read(json_t* value, libssig_signature* bytes) {
 	const char* text = json_string_value(json_object_get(value, "val"));
 	return text && json_object_size(value) == 1 &&
 	       libssig_base64_read(text, strlen(text), false, bytes);
 }
-bool libssig_jades_timestamp_read(json_t* value, libssig_signature* token) {
+bool libssig_jades_v121_timestamp_read(
+    json_t*            value,
+    libssig_signature* token
+) {
 	json_t* tokens = json_object_get(value, "tstTokens");
 	return json_object_size(value) == 1 && json_array_size(tokens) == 1 &&
-	       libssig_jades_pki_read(json_array_get(tokens, 0), token);
+	       libssig_jades_v121_pki_read(json_array_get(tokens, 0), token);
 }
-bool libssig_jades_input(const libssig_jades* doc, libssig_signature* bytes) {
+bool libssig_jades_v121_input(
+    const libssig_jades* doc,
+    libssig_signature*   bytes
+) {
 	const char* header = json_string_value(
 	    json_object_get(doc->root, "protected")
 	);
@@ -119,7 +125,7 @@ bool libssig_jades_input(const libssig_jades* doc, libssig_signature* bytes) {
 	       libssig_bytes_append(bytes, ".", 1) &&
 	       libssig_bytes_append(bytes, doc->payload, strlen(doc->payload));
 }
-bool libssig_jades_archive_input(
+bool libssig_jades_v121_archive_input(
     const libssig_jades* doc,
     size_t               count,
     libssig_signature*   bytes
@@ -221,7 +227,7 @@ static libssig_status headers_read(libssig_jades* doc) {
 	}
 	return LIBSSIG_OK;
 }
-libssig_status libssig_jades_read(
+libssig_status libssig_jades_v121_read(
     const libssig_verify_params* params,
     libssig_jades*               doc
 ) {
@@ -325,13 +331,13 @@ libssig_status libssig_jades_read(
 	return LIBSSIG_OK;
 }
 
-bool libssig_jades_timestamp_add(
+bool libssig_jades_v121_timestamp_add(
     libssig_jades*           doc,
     const char*              kind,
     const libssig_signature* token
 ) {
-	json_t* value = libssig_jades_pki(token);
+	json_t* value = libssig_jades_v121_pki(token);
 	json_t* item = value ? json_pack("{s:{s:[o]}}", kind, "tstTokens", value)
 	                     : NULL;
-	return item && libssig_jades_add(doc, item);
+	return item && libssig_jades_v121_add(doc, item);
 }

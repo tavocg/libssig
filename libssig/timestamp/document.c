@@ -13,8 +13,8 @@ typedef struct {
 	bool              jades;
 } timestamp_document;
 static void document_free(timestamp_document* doc) {
-	libssig_jades_free(&doc->json);
-	libssig_xades_free(&doc->xml);
+	libssig_jades_v121_free(&doc->json);
+	libssig_xades_v131_free(&doc->xml);
 	libssig_signature_free(&doc->input);
 }
 static libssig_status document_read(
@@ -29,12 +29,12 @@ static libssig_status document_read(
 	libssig_verify_params params = {.data = data, .data_len = len};
 	doc->jades = libssig_document_format(data, len) == LIBSSIG_FORMAT_JADES;
 	if (doc->jades) {
-		libssig_status status = libssig_jades_read(&params, &doc->json);
+		libssig_status status = libssig_jades_v121_read(&params, &doc->json);
 		if (status == LIBSSIG_ERROR_CONTENT_REQUIRED) {
 			static const unsigned char empty = 0;
-			libssig_jades_free(&doc->json);
+			libssig_jades_v121_free(&doc->json);
 			params.content = &empty;
-			status = libssig_jades_read(&params, &doc->json);
+			status = libssig_jades_v121_read(&params, &doc->json);
 		}
 		if (status != LIBSSIG_OK) {
 			return status;
@@ -50,7 +50,7 @@ static libssig_status document_read(
 		           : LIBSSIG_ERROR_MEMORY;
 	}
 	doc->xml.signature_only = true;
-	libssig_status status = libssig_xades_read(&params, &doc->xml);
+	libssig_status status = libssig_xades_v131_read(&params, &doc->xml);
 	if (status != LIBSSIG_OK) {
 		return status;
 	}
@@ -175,8 +175,8 @@ libssig_status libssig_document_timestamp(
 		    "etsiU"
 		);
 		if (status == LIBSSIG_OK &&
-		    (!libssig_jades_timestamp_add(&doc.json, "sigTst", &token) ||
-		     !libssig_jades_write(doc.json.root, output))) {
+		    (!libssig_jades_v121_timestamp_add(&doc.json, "sigTst", &token) ||
+		     !libssig_jades_v121_write(doc.json.root, output))) {
 			status = LIBSSIG_ERROR_MEMORY;
 		}
 	} else if (status == LIBSSIG_OK) {
@@ -193,7 +193,7 @@ libssig_status libssig_document_timestamp(
 		    NULL
 		);
 		if (!doc.xml.unsigned_properties ||
-		    !libssig_xades_timestamp_add(&doc.xml, false, &token) ||
+		    !libssig_xades_v131_timestamp_add(&doc.xml, false, &token) ||
 		    !libssig_xml_write(doc.xml.xml, output)) {
 			status = LIBSSIG_ERROR_MEMORY;
 		}

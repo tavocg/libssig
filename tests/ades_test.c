@@ -144,7 +144,7 @@ static int lt_revoked_check(
 	);
 	CHECK(cms && libssig_validation_embed(&cms, &validation) == LIBSSIG_OK);
 	libssig_signature encoded = {0};
-	CHECK(libssig_ades_encode(cms, &encoded) == LIBSSIG_OK);
+	CHECK(libssig_cms_encode(cms, &encoded) == LIBSSIG_OK);
 	verify.data = encoded.data;
 	verify.data_len = encoded.len;
 	libssig_verify_result result = {0};

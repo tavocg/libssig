@@ -90,7 +90,7 @@ static libssig_status pades_renew(
 	return status;
 }
 
-libssig_status libssig_pades_extend(
+libssig_status libssig_pades_v121_extend(
     const libssig_extend_params* params,
     libssig_signature*           output
 ) {
@@ -170,7 +170,7 @@ libssig_status libssig_pades_extend(
 	}
 	libssig_signature encoded = {0};
 	if (status == LIBSSIG_OK) {
-		status = libssig_ades_encode(cms, &encoded);
+		status = libssig_cms_encode(cms, &encoded);
 	}
 	if (status == LIBSSIG_OK &&
 	    encoded.len > (signature.hole_end - signature.hole_start - 2) / 2) {
@@ -203,7 +203,7 @@ libssig_status libssig_pades_extend(
 	    .services = params->services
 	};
 	if (status == LIBSSIG_OK) {
-		status = libssig_pades_finish(&finish, cms, output);
+		status = libssig_pades_v121_finish(&finish, cms, output);
 	}
 	libssig_signature_free(&encoded);
 	CMS_ContentInfo_free(cms);

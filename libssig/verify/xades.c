@@ -23,7 +23,7 @@ static libssig_status stamp_check(
         libssig_xml_child(node, "EncapsulatedTimeStamp", LIBSSIG_XADES132),
         &token
     );
-	ok = ok && (archive ? libssig_xades_archive_input(doc, node, &input)
+	ok = ok && (archive ? libssig_xades_v131_archive_input(doc, node, &input)
 	                    : libssig_xml_c14n(doc->signature_value, &input));
 	libssig_status status = ok ? libssig_document_stamp_verify(
 	                                 &input,
@@ -81,7 +81,7 @@ static libssig_status unsigned_check(
 		libssig_status status = LIBSSIG_OK;
 		if (libssig_xml_is(node, "AnyValidationData", LIBSSIG_XADES141)) {
 			validation = true;
-			status = libssig_xades_evidence_read(doc, node);
+			status = libssig_xades_v131_evidence_read(doc, node);
 		} else if (libssig_xml_is(
 		               node,
 		               "SignatureTimeStamp",
@@ -184,12 +184,12 @@ static libssig_status archives_history_check(
 	return LIBSSIG_OK;
 }
 
-libssig_status libssig_xades_verify(
+libssig_status libssig_xades_v131_verify(
     const libssig_verify_params* params,
     libssig_verify_result*       result
 ) {
 	libssig_xades     doc = {0};
-	libssig_status    status = libssig_xades_read(params, &doc);
+	libssig_status    status = libssig_xades_v131_read(params, &doc);
 	libssig_signature input = {0};
 	if (status == LIBSSIG_OK && !libssig_xml_c14n(doc.signed_info, &input)) {
 		status = LIBSSIG_ERROR_CRYPTO;
@@ -245,6 +245,6 @@ libssig_status libssig_xades_verify(
 	}
 	libssig_verify_profiles_finish(status, result);
 	libssig_signature_free(&input);
-	libssig_xades_free(&doc);
+	libssig_xades_v131_free(&doc);
 	return status;
 }

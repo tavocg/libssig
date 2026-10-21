@@ -3,7 +3,10 @@
 #include <stdlib.h>
 #include <string.h>
 
-libssig_status libssig_jades_evidence_read(libssig_jades* doc, json_t* value) {
+libssig_status libssig_jades_v121_evidence_read(
+    libssig_jades* doc,
+    json_t*        value
+) {
 	if (!json_is_object(value) || json_object_size(value) > 2) {
 		return LIBSSIG_ERROR_FORMAT;
 	}
@@ -24,7 +27,7 @@ libssig_status libssig_jades_evidence_read(libssig_jades* doc, json_t* value) {
 		json_t*           item = json_array_get(certs, i);
 		libssig_signature bytes = {0};
 		if (json_object_size(item) != 1 ||
-		    !libssig_jades_pki_read(
+		    !libssig_jades_v121_pki_read(
 		        json_object_get(item, "x509Cert"),
 		        &bytes
 		    )) {
@@ -63,7 +66,7 @@ libssig_status libssig_jades_evidence_read(libssig_jades* doc, json_t* value) {
 		}
 		for (size_t i = 0; i < json_array_size(items); ++i) {
 			libssig_signature bytes = {0};
-			bool              ok = libssig_jades_pki_read(
+			bool              ok = libssig_jades_v121_pki_read(
                           json_array_get(items, i),
                           &bytes
                       ) &&

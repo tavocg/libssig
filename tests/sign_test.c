@@ -619,7 +619,7 @@ static int cades_certificate_hash_corrupt(
 	));
 	OPENSSL_free(encoded);
 	libssig_key_sign_params signing = *params;
-	unsigned char*          attributes = libssig_cades_attributes_encode(
+	unsigned char*          attributes = libssig_cades_v131_attributes_encode(
         signer,
         &signing.data_len
     );
@@ -987,7 +987,9 @@ static int cms_check(
 		CHECK(libssig_cms_sign(ctx, params, &cert, &output) == LIBSSIG_OK);
 		CHECK(cms_verify(&output, (const unsigned char*)"", 0) == 0);
 		libssig_signature_free(&output);
-		CHECK(libssig_cades_sign(ctx, params, &cert, &output) == LIBSSIG_OK);
+		CHECK(
+		    libssig_cades_v131_sign(ctx, params, &cert, &output) == LIBSSIG_OK
+		);
 		CHECK(cms_verify(&output, (const unsigned char*)"", 0) == 0);
 		libssig_signature_free(&output);
 		params->data = saved_data;

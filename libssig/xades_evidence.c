@@ -2,7 +2,10 @@
 #include <libssig/xades.h>
 #include <stdlib.h>
 
-libssig_status libssig_xades_evidence_read(libssig_xades* doc, xmlNode* value) {
+libssig_status libssig_xades_v131_evidence_read(
+    libssig_xades* doc,
+    xmlNode*       value
+) {
 	for (xmlNode* group = value->children; group; group = group->next) {
 		if (group->type != XML_ELEMENT_NODE) {
 			continue;
@@ -80,7 +83,7 @@ libssig_status libssig_xades_evidence_read(libssig_xades* doc, xmlNode* value) {
 	}
 	return LIBSSIG_OK;
 }
-bool libssig_xades_evidence_add(
+bool libssig_xades_v131_evidence_add(
     libssig_xades*                 doc,
     const libssig_validation_data* evidence
 ) {

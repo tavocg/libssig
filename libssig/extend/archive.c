@@ -41,7 +41,7 @@ static libssig_status archive_token(
 		              index_len
 		          );
 		ASN1_OBJECT_free(oid);
-		status = ok ? libssig_ades_encode(token, token_der)
+		status = ok ? libssig_cms_encode(token, token_der)
 		            : LIBSSIG_ERROR_CRYPTO;
 	}
 	CMS_ContentInfo_free(token);
@@ -50,27 +50,27 @@ static libssig_status archive_token(
 	libssig_signature_free(&response);
 	return status;
 }
-libssig_status libssig_archive_apply(
+libssig_status libssig_cades_v131_archive_apply(
     CMS_ContentInfo**            cms,
     const libssig_extend_params* params
 ) {
 	STACK_OF(CMS_SignerInfo)* signers = CMS_get0_SignerInfos(*cms);
 	for (int i = 0; i < sk_CMS_SignerInfo_num(signers); ++i) {
-		CMS_SignerInfo*     signer = sk_CMS_SignerInfo_value(signers, i);
-		libssig_raw_cms*    raw = libssig_cms_decode(*cms);
-		libssig_hash_index* index = raw ? libssig_archive_index(
-		                                      raw,
-		                                      signer,
-		                                      libssig_timestamp_digest(
-		                                          params->hash
-		                                      )
-		                                  )
-		                                : NULL;
-		unsigned char*      encoded = NULL;
-		int           len = index ? i2d_libssig_hash_index(index, &encoded) : 0;
+		CMS_SignerInfo*  signer = sk_CMS_SignerInfo_value(signers, i);
+		libssig_raw_cms* raw = libssig_cms_decode(*cms);
+		libssig_cades_v131_hash_index*
+		               index = raw ? libssig_cades_v131_archive_index(
+                              raw,
+                              signer,
+                              libssig_timestamp_digest(params->hash)
+                          )
+		                           : NULL;
+		unsigned char* encoded = NULL;
+		int len = index ? i2d_libssig_cades_v131_hash_index(index, &encoded)
+		                : 0;
 		unsigned char imprint[EVP_MAX_MD_SIZE];
 		unsigned int  imprint_len = 0;
-		bool          ok = len > 0 && libssig_archive_imprint(
+		bool          ok = len > 0 && libssig_cades_v131_archive_imprint(
                                  *cms,
                                  raw,
                                  (size_t)i,
@@ -108,7 +108,7 @@ libssig_status libssig_archive_apply(
 		libssig_signature_free(&request);
 		libssig_signature_free(&token);
 		OPENSSL_free(encoded);
-		libssig_hash_index_free(index);
+		libssig_cades_v131_hash_index_free(index);
 		libssig_raw_cms_free(raw);
 		if (status != LIBSSIG_OK) {
 			return status;

@@ -2,7 +2,7 @@
 #include <libssig/xades.h>
 #include <stdlib.h>
 
-libssig_status libssig_xades_extend(
+libssig_status libssig_xades_v131_extend(
     const libssig_extend_params* params,
     libssig_signature*           output
 ) {
@@ -14,7 +14,7 @@ libssig_status libssig_xades_extend(
 	    .options = LIBSSIG_VERIFY_CURRENT_TIME
 	};
 	libssig_verify_result result = {0};
-	libssig_status        status = libssig_xades_verify(&verify, &result);
+	libssig_status        status = libssig_xades_v131_verify(&verify, &result);
 	libssig_level         current = result.count ? result.signers[0].level
 	                                             : LIBSSIG_LEVEL_B_B;
 	libssig_verify_free(&result);
@@ -22,7 +22,7 @@ libssig_status libssig_xades_extend(
 		return status;
 	}
 	libssig_xades doc = {0};
-	status = libssig_xades_read(&verify, &doc);
+	status = libssig_xades_v131_read(&verify, &doc);
 	if (status == LIBSSIG_OK && params->level != LIBSSIG_LEVEL_B_B &&
 	    !doc.unsigned_properties) {
 		xmlNode* q = doc.properties->parent;
@@ -57,7 +57,7 @@ libssig_status libssig_xades_extend(
 			);
 		}
 		if (status == LIBSSIG_OK &&
-		    !libssig_xades_timestamp_add(&doc, false, &stamp)) {
+		    !libssig_xades_v131_timestamp_add(&doc, false, &stamp)) {
 			status = LIBSSIG_ERROR_MEMORY;
 		}
 		libssig_signature_free(&input);
@@ -113,14 +113,14 @@ libssig_status libssig_xades_extend(
 			}
 		}
 		if (status == LIBSSIG_OK &&
-		    !libssig_xades_evidence_add(&doc, &evidence)) {
+		    !libssig_xades_v131_evidence_add(&doc, &evidence)) {
 			status = LIBSSIG_ERROR_MEMORY;
 		}
 		libssig_validation_free(&evidence);
 	}
 	libssig_signature_free(&stamp);
 	if (status == LIBSSIG_OK && params->level == LIBSSIG_LEVEL_B_LTA) {
-		if (!libssig_xades_archive_input(&doc, NULL, &input)) {
+		if (!libssig_xades_v131_archive_input(&doc, NULL, &input)) {
 			status = LIBSSIG_ERROR_CRYPTO;
 		}
 		if (status == LIBSSIG_OK) {
@@ -132,7 +132,7 @@ libssig_status libssig_xades_extend(
 			);
 		}
 		if (status == LIBSSIG_OK &&
-		    !libssig_xades_timestamp_add(&doc, true, &stamp)) {
+		    !libssig_xades_v131_timestamp_add(&doc, true, &stamp)) {
 			status = LIBSSIG_ERROR_MEMORY;
 		}
 	}
@@ -141,6 +141,6 @@ libssig_status libssig_xades_extend(
 	}
 	libssig_signature_free(&input);
 	libssig_signature_free(&stamp);
-	libssig_xades_free(&doc);
+	libssig_xades_v131_free(&doc);
 	return status;
 }

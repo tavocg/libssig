@@ -71,3 +71,14 @@ preservation requires timely archive renewal, appropriate algorithms, trusted
 services, retained evidence and an application preservation process. National
 policy enforcement and version selection are proposed separately for review;
 no unchecked selector can turn unsupported behavior into a conformant result.
+
+## Private workflow names
+
+Edition-dependent entry points are private and named explicitly:
+`libssig_cades_v131_sign/extend/verify`, `libssig_pades_v121_sign/extend/verify`,
+`libssig_xades_v131_sign/extend/verify` and
+`libssig_jades_v121_sign/extend/verify`. Archive and qualifying-property helpers
+carry the corresponding edition prefix as well. Shared CMS/RFC 3161, cryptography,
+trust, revocation, byte and transport services remain independent of this naming.
+Public functions remain `libssig_sign`, `libssig_extend`, `libssig_verify` and
+the timestamp APIs. Public version-selection masks are not implemented yet.

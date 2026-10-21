@@ -109,7 +109,7 @@ static bool mime_attribute_add(CMS_SignerInfo* signer, const char* type) {
 	return ok;
 }
 
-bool libssig_cades_attributes_add(
+bool libssig_cades_v131_attributes_add(
     CMS_SignerInfo*                signer,
     X509*                          cert,
     const libssig_key_sign_params* params,
@@ -153,7 +153,7 @@ static bool attributes_restore(
 	return true;
 }
 
-unsigned char* libssig_cades_attributes_encode(
+unsigned char* libssig_cades_v131_attributes_encode(
     CMS_SignerInfo* signer,
     size_t*         out_len
 ) {

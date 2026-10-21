@@ -22,7 +22,7 @@ typedef struct {
 	libssig_signature       content, signature;
 	libssig_validation_data evidence;
 } libssig_xades;
-void     libssig_xades_free(libssig_xades* doc);
+void     libssig_xades_v131_free(libssig_xades* doc);
 xmlNode* libssig_xml_child(xmlNode* parent, const char* name, const char* ns);
 bool     libssig_xml_is(xmlNode* node, const char* name, const char* ns);
 bool     libssig_xml_prop(xmlNode* node, const char* name, const char* value);
@@ -35,28 +35,31 @@ xmlNode* libssig_xml_add(
 bool        libssig_xml_c14n(xmlNode* node, libssig_signature* bytes);
 bool        libssig_xml_base64(xmlNode* node, libssig_signature* bytes);
 bool        libssig_xml_write(xmlDoc* doc, libssig_signature* bytes);
-const char* libssig_xades_hash_uri(libssig_hash hash);
-const char* libssig_xades_algo_uri(libssig_algo algo, libssig_hash hash);
-bool        libssig_xades_digest_node(
+const char* libssig_xades_v131_hash_uri(libssig_hash hash);
+const char* libssig_xades_v131_algo_uri(libssig_algo algo, libssig_hash hash);
+bool        libssig_xades_v131_digest_node(
            xmlNode*                 parent,
            const libssig_signature* bytes,
            libssig_hash             hash
        );
-libssig_status libssig_xades_read(
+libssig_status libssig_xades_v131_read(
     const libssig_verify_params* params,
     libssig_xades*               doc
 );
-bool libssig_xades_archive_input(
+bool libssig_xades_v131_archive_input(
     const libssig_xades* doc,
     xmlNode*             stop,
     libssig_signature*   bytes
 );
-libssig_status libssig_xades_evidence_read(libssig_xades* doc, xmlNode* value);
-bool           libssig_xades_evidence_add(
-              libssig_xades*                 doc,
-              const libssig_validation_data* evidence
-          );
-bool libssig_xades_timestamp_add(
+libssig_status libssig_xades_v131_evidence_read(
+    libssig_xades* doc,
+    xmlNode*       value
+);
+bool libssig_xades_v131_evidence_add(
+    libssig_xades*                 doc,
+    const libssig_validation_data* evidence
+);
+bool libssig_xades_v131_timestamp_add(
     libssig_xades*           doc,
     bool                     archive,
     const libssig_signature* token

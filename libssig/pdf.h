@@ -41,7 +41,7 @@ libssig_status libssig_pdf_insert(
     const libssig_signature* token,
     libssig_signature*       output
 );
-libssig_status libssig_pades_finish(
+libssig_status libssig_pades_v121_finish(
     const libssig_sign_params* params,
     CMS_ContentInfo*           cms,
     libssig_signature*         output

@@ -59,29 +59,29 @@ libssig_status libssig_document_validate(
 );
 libssig_format libssig_document_format(const unsigned char* data, size_t len);
 
-libssig_status libssig_jades_sign(
+libssig_status libssig_jades_v121_sign(
     const libssig_context*     ctx,
     const libssig_sign_params* params,
     libssig_signature*         output
 );
-libssig_status libssig_xades_sign(
+libssig_status libssig_xades_v131_sign(
     const libssig_context*     ctx,
     const libssig_sign_params* params,
     libssig_signature*         output
 );
-libssig_status libssig_jades_extend(
+libssig_status libssig_jades_v121_extend(
     const libssig_extend_params* params,
     libssig_signature*           output
 );
-libssig_status libssig_xades_extend(
+libssig_status libssig_xades_v131_extend(
     const libssig_extend_params* params,
     libssig_signature*           output
 );
-libssig_status libssig_jades_verify(
+libssig_status libssig_jades_v121_verify(
     const libssig_verify_params* params,
     libssig_verify_result*       result
 );
-libssig_status libssig_xades_verify(
+libssig_status libssig_xades_v131_verify(
     const libssig_verify_params* params,
     libssig_verify_result*       result
 );

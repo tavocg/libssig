@@ -7,7 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-void libssig_xades_free(libssig_xades* doc) {
+void libssig_xades_v131_free(libssig_xades* doc) {
 	xmlFreeDoc(doc->xml);
 	X509_free(doc->cert);
 	libssig_signature_free(&doc->content);
@@ -57,7 +57,7 @@ static bool digest_check(xmlNode* node, const libssig_signature* bytes) {
 		if (libssig_xml_prop(
 		        method,
 		        "Algorithm",
-		        libssig_xades_hash_uri((libssig_hash)i)
+		        libssig_xades_v131_hash_uri((libssig_hash)i)
 		    )) {
 			hash = (libssig_hash)i;
 			found = true;
@@ -248,7 +248,7 @@ static bool properties_valid(libssig_xades* doc) {
 	       libssig_xml_prop(format, "ObjectReference", "#Reference-data") &&
 	       libssig_xml_child(format, "MimeType", LIBSSIG_XADES132);
 }
-libssig_status libssig_xades_read(
+libssig_status libssig_xades_v131_read(
     const libssig_verify_params* params,
     libssig_xades*               doc
 ) {
@@ -345,7 +345,10 @@ libssig_status libssig_xades_read(
 			if (libssig_xml_prop(
 			        method,
 			        "Algorithm",
-			        libssig_xades_algo_uri((libssig_algo)i, (libssig_hash)j)
+			        libssig_xades_v131_algo_uri(
+			            (libssig_algo)i,
+			            (libssig_hash)j
+			        )
 			    )) {
 				doc->algo = (libssig_algo)i;
 				doc->hash = (libssig_hash)j;
@@ -371,7 +374,7 @@ libssig_status libssig_xades_read(
 	}
 	return status;
 }
-bool libssig_xades_archive_input(
+bool libssig_xades_v131_archive_input(
     const libssig_xades* doc,
     xmlNode*             stop,
     libssig_signature*   bytes
@@ -400,7 +403,7 @@ bool libssig_xades_archive_input(
 	return ok;
 }
 
-bool libssig_xades_timestamp_add(
+bool libssig_xades_v131_timestamp_add(
     libssig_xades*           doc,
     bool                     archive,
     const libssig_signature* token

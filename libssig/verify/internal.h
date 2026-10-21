@@ -49,14 +49,18 @@ libssig_status libssig_verify_ocsp(
     const libssig_verify_params* params,
     libssig_verify_result*       result
 );
-libssig_status libssig_verify_archives(
+libssig_status libssig_cades_v131_verify_archives(
     CMS_ContentInfo*             cms,
     const libssig_verify_params* params,
     libssig_verify_result*       result
 );
-libssig_status libssig_pades_verify(
+libssig_status libssig_pades_v121_verify(
     const libssig_verify_params* params,
     libssig_verify_result*       result
 );
 
+libssig_status libssig_cades_v131_verify(
+    const libssig_verify_params* params,
+    libssig_verify_result*       result
+);
 #endif

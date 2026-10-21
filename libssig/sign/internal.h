@@ -61,7 +61,7 @@ libssig_status libssig_cms_sign(
 /* CAdES B-B DER: atributos firmados y signingCertificateV2.
  * Mismas reglas de propiedad y límites que libssig_cms_sign.
  * signingTime es hora declarada local, no un sello de tiempo de una TSA. */
-libssig_status libssig_cades_sign(
+libssig_status libssig_cades_v131_sign(
     const libssig_context*         ctx,
     const libssig_key_sign_params* params,
     const libssig_certificate*     cert,
@@ -70,19 +70,19 @@ libssig_status libssig_cades_sign(
 
 #define LIBSSIG_CADES_MIME_TYPE_OID "0.4.0.1733.2.1"
 
-bool libssig_cades_attributes_add(
+bool libssig_cades_v131_attributes_add(
     CMS_SignerInfo*                signer,
     X509*                          cert,
     const libssig_key_sign_params* params,
     const EVP_MD*                  digest
 );
 /* DER SET OF firmado por el token; liberar con OPENSSL_free. */
-unsigned char* libssig_cades_attributes_encode(
+unsigned char* libssig_cades_v131_attributes_encode(
     CMS_SignerInfo* signer,
     size_t*         out_len
 );
 
-libssig_status libssig_pades_sign(
+libssig_status libssig_pades_v121_sign(
     const libssig_context*     ctx,
     const libssig_sign_params* params,
     libssig_signature*         output

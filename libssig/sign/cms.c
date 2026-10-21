@@ -171,7 +171,7 @@ static CMS_ContentInfo* container_create(
 	if (!signer || !CMS_set_detached(cms, 1) ||
 	    !signature_algorithm_set(signer, params->algo, digest) ||
 	    (cades &&
-	     !libssig_cades_attributes_add(signer, cert, params, digest))) {
+	     !libssig_cades_v131_attributes_add(signer, cert, params, digest))) {
 		CMS_ContentInfo_free(cms);
 		return NULL;
 	}
@@ -273,7 +273,10 @@ static libssig_status container_sign(
 	libssig_key_sign_params signing = *params;
 	unsigned char*          attributes = NULL;
 	if (cades) {
-		attributes = libssig_cades_attributes_encode(signer, &signing.data_len);
+		attributes = libssig_cades_v131_attributes_encode(
+		    signer,
+		    &signing.data_len
+		);
 		if (!attributes) {
 			return LIBSSIG_ERROR_CRYPTO;
 		}
@@ -332,7 +335,7 @@ libssig_status libssig_cms_sign(
 	return container_sign_with_certificate(ctx, params, cert, false, output);
 }
 
-libssig_status libssig_cades_sign(
+libssig_status libssig_cades_v131_sign(
     const libssig_context*         ctx,
     const libssig_key_sign_params* params,
     const libssig_certificate*     cert,

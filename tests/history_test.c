@@ -195,9 +195,9 @@ static int history_case(
 	    .services = &services,
 	    .hash = LIBSSIG_HASH_SHA256
 	};
-	CHECK(libssig_archive_apply(&cms, &extend) == LIBSSIG_OK);
+	CHECK(libssig_cades_v131_archive_apply(&cms, &extend) == LIBSSIG_OK);
 	libssig_signature encoded = {0};
-	CHECK(libssig_ades_encode(cms, &encoded) == LIBSSIG_OK);
+	CHECK(libssig_cms_encode(cms, &encoded) == LIBSSIG_OK);
 	libssig_verify_params params = *trust;
 	params.data = encoded.data;
 	params.data_len = encoded.len;

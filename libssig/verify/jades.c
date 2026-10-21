@@ -29,7 +29,7 @@ static libssig_status unsigned_read(
 	size_t                 count = json_array_size(doc->unsigned_items);
 	bool                   has_archive = false;
 	for (size_t i = 0; i < count; ++i) {
-		json_t* item = libssig_jades_item(
+		json_t* item = libssig_jades_v121_item(
 		    json_array_get(doc->unsigned_items, i)
 		);
 		if (json_object_get(item, "arcTst")) {
@@ -44,7 +44,7 @@ static libssig_status unsigned_read(
 	bool validation = false;
 	bool timestamp_seen = false;
 	for (size_t i = 0; i < count; ++i) {
-		json_t* item = libssig_jades_item(
+		json_t* item = libssig_jades_v121_item(
 		    json_array_get(doc->unsigned_items, i)
 		);
 		if (!json_is_object(item) || json_object_size(item) != 1) {
@@ -55,25 +55,26 @@ static libssig_status unsigned_read(
 		json_t*        value = json_object_get(item, key);
 		libssig_status status = LIBSSIG_OK;
 		if (!strcmp(key, "anyValData")) {
-			status = libssig_jades_evidence_read(doc, value);
+			status = libssig_jades_v121_evidence_read(doc, value);
 			validation = true;
 		} else if (!strcmp(key, "sigTst") || !strcmp(key, "arcTst")) {
 			bool              archive = !strcmp(key, "arcTst");
 			libssig_signature token = {0}, input = {0};
 			if ((!archive && timestamp_seen) || (archive && !timestamp_seen) ||
-			    !libssig_jades_timestamp_read(value, &token)) {
+			    !libssig_jades_v121_timestamp_read(value, &token)) {
 				status = LIBSSIG_ERROR_FORMAT;
 			}
 			if (status == LIBSSIG_OK) {
 				const char* signature = json_string_value(
 				    json_object_get(doc->root, "signature")
 				);
-				bool ok = archive ? libssig_jades_archive_input(doc, i, &input)
-				                  : libssig_bytes_append(
-				                        &input,
-				                        signature,
-				                        strlen(signature)
-				                    );
+				bool ok = archive
+				              ? libssig_jades_v121_archive_input(doc, i, &input)
+				              : libssig_bytes_append(
+				                    &input,
+				                    signature,
+				                    strlen(signature)
+				                );
 				if (!ok) {
 					status = LIBSSIG_ERROR_MEMORY;
 				}
@@ -151,7 +152,7 @@ static libssig_status archives_history_check(
 		return LIBSSIG_OK;
 	}
 	for (size_t i = 0; i + 1 < json_array_size(doc->unsigned_items); ++i) {
-		json_t* item = libssig_jades_item(
+		json_t* item = libssig_jades_v121_item(
 		    json_array_get(doc->unsigned_items, i)
 		);
 		json_t*        value = json_object_get(item, "arcTst");
@@ -161,8 +162,8 @@ static libssig_status archives_history_check(
 			libssig_verify_timestamp stamp = {0};
 			libssig_verify_params    selected = *params;
 			selected.options |= LIBSSIG_VERIFY_HISTORICAL;
-			status = libssig_jades_timestamp_read(value, &token) &&
-			                 libssig_jades_archive_input(doc, i, &input)
+			status = libssig_jades_v121_timestamp_read(value, &token) &&
+			                 libssig_jades_v121_archive_input(doc, i, &input)
 			             ? libssig_document_stamp_verify(
 			                   &input,
 			                   &token,
@@ -190,16 +191,16 @@ static libssig_status archives_history_check(
 	return LIBSSIG_OK;
 }
 
-libssig_status libssig_jades_verify(
+libssig_status libssig_jades_v121_verify(
     const libssig_verify_params* params,
     libssig_verify_result*       result
 ) {
 	libssig_jades  doc = {0};
-	libssig_status status = libssig_jades_read(params, &doc);
+	libssig_status status = libssig_jades_v121_read(params, &doc);
 	libssig_algo   algo;
 	libssig_hash   hash;
 	if (status == LIBSSIG_OK) {
-		status = libssig_jades_alg(
+		status = libssig_jades_v121_alg(
 		    json_string_value(json_object_get(doc.protected, "alg")),
 		    doc.cert,
 		    &algo,
@@ -207,7 +208,7 @@ libssig_status libssig_jades_verify(
 		);
 	}
 	libssig_signature input = {0};
-	if (status == LIBSSIG_OK && !libssig_jades_input(&doc, &input)) {
+	if (status == LIBSSIG_OK && !libssig_jades_v121_input(&doc, &input)) {
 		status = LIBSSIG_ERROR_MEMORY;
 	}
 	if (status == LIBSSIG_OK && !libssig_document_signature_check(
@@ -265,6 +266,6 @@ libssig_status libssig_jades_verify(
 	}
 	libssig_verify_profiles_finish(status, result);
 	libssig_signature_free(&input);
-	libssig_jades_free(&doc);
+	libssig_jades_v121_free(&doc);
 	return status;
 }

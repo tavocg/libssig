@@ -107,7 +107,7 @@ bool libssig_xml_write(xmlDoc* doc, libssig_signature* bytes) {
 	xmlFree(data);
 	return ok;
 }
-const char* libssig_xades_hash_uri(libssig_hash hash) {
+const char* libssig_xades_v131_hash_uri(libssig_hash hash) {
 	const char* uris[] = {
 	    "http://www.w3.org/2001/04/xmlenc#sha256",
 	    "http://www.w3.org/2001/04/xmldsig-more#sha384",
@@ -115,7 +115,7 @@ const char* libssig_xades_hash_uri(libssig_hash hash) {
 	};
 	return hash >= 0 && hash <= LIBSSIG_HASH_SHA512 ? uris[hash] : NULL;
 }
-const char* libssig_xades_algo_uri(libssig_algo algo, libssig_hash hash) {
+const char* libssig_xades_v131_algo_uri(libssig_algo algo, libssig_hash hash) {
 	const char* uris[3][3] = {
 	    {"http://www.w3.org/2001/04/xmldsig-more#rsa-sha256",
 	     "http://www.w3.org/2001/04/xmldsig-more#rsa-sha384",
@@ -132,7 +132,7 @@ const char* libssig_xades_algo_uri(libssig_algo algo, libssig_hash hash) {
 	           ? uris[algo][hash]
 	           : NULL;
 }
-bool libssig_xades_digest_node(
+bool libssig_xades_v131_digest_node(
     xmlNode*                 parent,
     const libssig_signature* bytes,
     libssig_hash             hash
@@ -149,7 +149,7 @@ bool libssig_xades_digest_node(
 	          xmlNewProp(
 	              method,
 	              BAD_CAST "Algorithm",
-	              BAD_CAST libssig_xades_hash_uri(hash)
+	              BAD_CAST libssig_xades_v131_hash_uri(hash)
 	          ) &&
 	          libssig_xml_add(parent, LIBSSIG_XMLDSIG, "DigestValue", text);
 	free(text);

@@ -95,13 +95,13 @@ libssig_status libssig_sign(
 	}
 
 	if (params->format == LIBSSIG_FORMAT_JADES) {
-		return libssig_jades_sign(ctx, params, signature);
+		return libssig_jades_v121_sign(ctx, params, signature);
 	}
 	if (params->format == LIBSSIG_FORMAT_XADES) {
-		return libssig_xades_sign(ctx, params, signature);
+		return libssig_xades_v131_sign(ctx, params, signature);
 	}
 	if (params->format == LIBSSIG_FORMAT_PADES) {
-		return libssig_pades_sign(ctx, params, signature);
+		return libssig_pades_v121_sign(ctx, params, signature);
 	}
 
 	libssig_key_sign_params signing = {
@@ -118,7 +118,12 @@ libssig_status libssig_sign(
 	    .options = params->options,
 	};
 	status = params->format == LIBSSIG_FORMAT_CADES
-	             ? libssig_cades_sign(ctx, &signing, params->cert, signature)
+	             ? libssig_cades_v131_sign(
+	                   ctx,
+	                   &signing,
+	                   params->cert,
+	                   signature
+	               )
 	             : libssig_cms_sign(ctx, &signing, params->cert, signature);
 	if (status == LIBSSIG_OK && params->level != LIBSSIG_LEVEL_B_B) {
 		static const unsigned char empty = 0;

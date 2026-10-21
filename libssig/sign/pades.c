@@ -92,7 +92,12 @@ static libssig_status pdf_signature(
 	    .options = LIBSSIG_SIGN_DETACHED,
 	};
 	if (status == LIBSSIG_OK) {
-		status = libssig_cades_sign(ctx, &signing, params->cert, &signature);
+		status = libssig_cades_v131_sign(
+		    ctx,
+		    &signing,
+		    params->cert,
+		    &signature
+		);
 	}
 	if (status == LIBSSIG_OK) {
 		const unsigned char* cursor = signature.data;
@@ -109,7 +114,7 @@ static libssig_status pdf_signature(
 		status = libssig_ades_stamps(*out_cms, &extend);
 		libssig_signature_free(&signature);
 		if (status == LIBSSIG_OK) {
-			status = libssig_ades_encode(*out_cms, &signature);
+			status = libssig_cms_encode(*out_cms, &signature);
 		}
 	}
 	if (status == LIBSSIG_OK) {
@@ -124,7 +129,7 @@ static libssig_status pdf_signature(
 	libssig_pdf_close(&revision);
 	return status;
 }
-libssig_status libssig_pades_sign(
+libssig_status libssig_pades_v121_sign(
     const libssig_context*     ctx,
     const libssig_sign_params* params,
     libssig_signature*         output
@@ -135,7 +140,7 @@ libssig_status libssig_pades_sign(
 	CMS_ContentInfo* cms = NULL;
 	libssig_status   status = pdf_signature(ctx, params, output, &cms);
 	if (status == LIBSSIG_OK) {
-		status = libssig_pades_finish(params, cms, output);
+		status = libssig_pades_v121_finish(params, cms, output);
 	}
 	CMS_ContentInfo_free(cms);
 	if (status != LIBSSIG_OK) {

@@ -185,7 +185,7 @@ static int negative_check_document(
 		);
 		CHECK(root);
 		json_object_set_new(root, "payload", json_string("dGFtcGVyZWQ"));
-		CHECK(libssig_jades_write(root, &altered));
+		CHECK(libssig_jades_v121_write(root, &altered));
 		json_decref(root);
 	} else {
 		xmlDoc* xml = xmlReadMemory(
@@ -229,7 +229,7 @@ static int negative_check_document(
 		);
 		CHECK(items && json_array_size(items) >= 3);
 		CHECK(json_array_remove(items, 1) == 0);
-		CHECK(libssig_jades_write(root, &altered));
+		CHECK(libssig_jades_v121_write(root, &altered));
 		json_decref(root);
 	} else {
 		xmlDoc* xml = xmlReadMemory(

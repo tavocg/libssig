@@ -21,7 +21,7 @@ static bool evidence_add(
 		    .data = der,
 		    .len = len > 0 ? (size_t)len : 0
 		};
-		json_t* pki = len > 0 ? libssig_jades_pki(&bytes) : NULL;
+		json_t* pki = len > 0 ? libssig_jades_v121_pki(&bytes) : NULL;
 		json_t* item = pki ? json_pack("{s:o}", "x509Cert", pki) : NULL;
 		ok = item && json_array_append(certs, item) == 0;
 		json_decref(item);
@@ -42,7 +42,7 @@ static bool evidence_add(
 			ok = ok && items &&
 			     json_object_set_new(revocations, kind, items) == 0;
 		}
-		json_t* pki = ok ? libssig_jades_pki(&bytes) : NULL;
+		json_t* pki = ok ? libssig_jades_v121_pki(&bytes) : NULL;
 		ok = pki && json_array_append(items, pki) == 0;
 		json_decref(pki);
 		libssig_signature_free(&bytes);
@@ -55,13 +55,13 @@ static bool evidence_add(
 		ok = json_object_set(data, "rVals", revocations) == 0;
 	}
 	json_t* item = ok ? json_pack("{s:O}", "anyValData", data) : NULL;
-	ok = item && libssig_jades_add(doc, item);
+	ok = item && libssig_jades_v121_add(doc, item);
 	json_decref(data);
 	json_decref(certs);
 	json_decref(revocations);
 	return ok;
 }
-libssig_status libssig_jades_extend(
+libssig_status libssig_jades_v121_extend(
     const libssig_extend_params* params,
     libssig_signature*           output
 ) {
@@ -73,7 +73,7 @@ libssig_status libssig_jades_extend(
 	    .options = LIBSSIG_VERIFY_CURRENT_TIME
 	};
 	libssig_verify_result result = {0};
-	libssig_status        status = libssig_jades_verify(&verify, &result);
+	libssig_status        status = libssig_jades_v121_verify(&verify, &result);
 	libssig_level         current = result.count ? result.signers[0].level
 	                                             : LIBSSIG_LEVEL_B_B;
 	libssig_verify_free(&result);
@@ -81,7 +81,7 @@ libssig_status libssig_jades_extend(
 		return status;
 	}
 	libssig_jades doc = {0};
-	status = libssig_jades_read(&verify, &doc);
+	status = libssig_jades_v121_read(&verify, &doc);
 	if (status == LIBSSIG_OK && !doc.unsigned_items &&
 	    params->level != LIBSSIG_LEVEL_B_B) {
 		json_t* items = json_array();
@@ -112,7 +112,7 @@ libssig_status libssig_jades_extend(
 			);
 		}
 		if (status == LIBSSIG_OK &&
-		    !libssig_jades_timestamp_add(&doc, "sigTst", &stamp)) {
+		    !libssig_jades_v121_timestamp_add(&doc, "sigTst", &stamp)) {
 			status = LIBSSIG_ERROR_MEMORY;
 		}
 		libssig_signature_free(&input);
@@ -121,12 +121,12 @@ libssig_status libssig_jades_extend(
 	                             params->level == LIBSSIG_LEVEL_B_LTA)) {
 		if (!stamp.data) {
 			for (size_t i = 0; i < json_array_size(doc.unsigned_items); ++i) {
-				json_t* item = libssig_jades_item(
+				json_t* item = libssig_jades_v121_item(
 				    json_array_get(doc.unsigned_items, i)
 				);
 				json_t* value = json_object_get(item, "sigTst");
 				bool    found = value &&
-				             libssig_jades_timestamp_read(value, &stamp);
+				             libssig_jades_v121_timestamp_read(value, &stamp);
 				json_decref(item);
 				if (found) {
 					break;
@@ -144,13 +144,13 @@ libssig_status libssig_jades_extend(
 		for (size_t i = 0;
 		     status == LIBSSIG_OK && i < json_array_size(doc.unsigned_items);
 		     ++i) {
-			json_t* item = libssig_jades_item(
+			json_t* item = libssig_jades_v121_item(
 			    json_array_get(doc.unsigned_items, i)
 			);
 			json_t* value = json_object_get(item, "arcTst");
 			if (value) {
 				libssig_signature previous = {0};
-				status = libssig_jades_timestamp_read(value, &previous)
+				status = libssig_jades_v121_timestamp_read(value, &previous)
 				             ? libssig_validation_timestamp_collect(
 				                   &previous,
 				                   params->services,
@@ -168,7 +168,7 @@ libssig_status libssig_jades_extend(
 	}
 	libssig_signature_free(&stamp);
 	if (status == LIBSSIG_OK && params->level == LIBSSIG_LEVEL_B_LTA) {
-		if (!libssig_jades_archive_input(
+		if (!libssig_jades_v121_archive_input(
 		        &doc,
 		        json_array_size(doc.unsigned_items),
 		        &input
@@ -184,15 +184,15 @@ libssig_status libssig_jades_extend(
 			);
 		}
 		if (status == LIBSSIG_OK &&
-		    !libssig_jades_timestamp_add(&doc, "arcTst", &stamp)) {
+		    !libssig_jades_v121_timestamp_add(&doc, "arcTst", &stamp)) {
 			status = LIBSSIG_ERROR_MEMORY;
 		}
 	}
-	if (status == LIBSSIG_OK && !libssig_jades_write(doc.root, output)) {
+	if (status == LIBSSIG_OK && !libssig_jades_v121_write(doc.root, output)) {
 		status = LIBSSIG_ERROR_MEMORY;
 	}
 	libssig_signature_free(&stamp);
 	libssig_signature_free(&input);
-	libssig_jades_free(&doc);
+	libssig_jades_v121_free(&doc);
 	return status;
 }

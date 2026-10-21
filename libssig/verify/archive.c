@@ -66,10 +66,10 @@ static libssig_status archive_verify(
 	                                  ? X509_ATTRIBUTE_get0_type(attr, 0)
 	                                  : NULL;
 	ASN1_OBJECT_free(oid);
-	libssig_hash_index* index = NULL;
+	libssig_cades_v131_hash_index* index = NULL;
 	if (index_value && index_value->type == V_ASN1_SEQUENCE) {
 		cursor = ASN1_STRING_get0_data(index_value->value.sequence);
-		index = d2i_libssig_hash_index(
+		index = d2i_libssig_cades_v131_hash_index(
 		    NULL,
 		    &cursor,
 		    ASN1_STRING_length(index_value->value.sequence)
@@ -88,9 +88,9 @@ static libssig_status archive_verify(
         CMS_get0_SignerInfos(cms),
         signer_index
     );
-	libssig_hash_index* current = raw && md
-	                                  ? libssig_archive_index(raw, signer, md)
-	                                  : NULL;
+	libssig_cades_v131_hash_index*
+	     current = raw && md ? libssig_cades_v131_archive_index(raw, signer, md)
+	                         : NULL;
 	bool ok = index && current && index_matches(index->certs, current->certs) &&
 	          index_matches(index->revocations, current->revocations) &&
 	          index_matches(index->attributes, current->attributes);
@@ -110,7 +110,7 @@ static libssig_status archive_verify(
 	    .hash = hash
 	};
 	if (ok) {
-		ok = libssig_archive_imprint(
+		ok = libssig_cades_v131_archive_imprint(
 		    cms,
 		    raw,
 		    (size_t)signer_index,
@@ -134,13 +134,13 @@ static libssig_status archive_verify(
 	                                 result
 	                             )
 	                           : LIBSSIG_ERROR_TIMESTAMP;
-	libssig_hash_index_free(current);
-	libssig_hash_index_free(index);
+	libssig_cades_v131_hash_index_free(current);
+	libssig_cades_v131_hash_index_free(index);
 	libssig_raw_cms_free(raw);
 	CMS_ContentInfo_free(token);
 	return status;
 }
-libssig_status libssig_verify_archives(
+libssig_status libssig_cades_v131_verify_archives(
     CMS_ContentInfo*             cms,
     const libssig_verify_params* params,
     libssig_verify_result*       result

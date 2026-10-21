@@ -409,7 +409,7 @@ static libssig_status pdf_validation(
 	return status;
 }
 
-libssig_status libssig_pades_verify(
+libssig_status libssig_pades_v121_verify(
     const libssig_verify_params* params,
     libssig_verify_result*       result
 ) {
