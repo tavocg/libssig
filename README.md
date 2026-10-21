@@ -94,15 +94,21 @@ Requires CMake 3.16 or newer, a C99 compiler, `pkg-config`, and the development
 packages for `p11-kit-1`, OpenSSL 3.0 or newer (`libcrypto`), `libmagic` (with its magic database), QPDF >= 11, Jansson, and libxml2.
 
 ```sh
+git submodule update --init --recursive
 cmake -S . -B build
 cmake --build build
 ```
 
-Run tests:
+Run tests (Python dependencies are included in `nix develop`; otherwise see
+[tests/README.md](tests/README.md)):
 
 ```sh
+git submodule update --init --recursive
 ctest --test-dir build --output-on-failure
 ```
+
+Conformance checks are enabled by default. `-DLIBSSIG_TEST_CONFORMANCE=OFF`
+selects a minimal C-only test build; `-DBUILD_TESTING=OFF` builds only the library.
 
 Build release and install:
 

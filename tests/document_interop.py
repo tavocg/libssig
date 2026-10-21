@@ -14,6 +14,8 @@ from cryptography.hazmat.primitives.asymmetric import ec, padding
 from cryptography.hazmat.primitives.asymmetric.utils import encode_dss_signature
 from lxml import etree
 
+OPENSSL = sys.argv[2] if len(sys.argv) > 2 else "openssl"
+
 NS = {"ds": "http://www.w3.org/2000/09/xmldsig#", "x": "http://uri.etsi.org/01903/v1.3.2#", "v": "http://uri.etsi.org/01903/v1.4.1#"}
 
 def b64(text):
@@ -41,7 +43,7 @@ def crypto(cert, algorithm, hash_name, signature, data):
 def timestamp(token, data, root, work):
     (work / "token.der").write_bytes(token)
     (work / "imprint.bin").write_bytes(data)
-    subprocess.run(["openssl", "ts", "-verify", "-token_in", "-in", str(work / "token.der"), "-data", str(work / "imprint.bin"), "-CAfile", str(root)], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    subprocess.run([OPENSSL, "ts", "-verify", "-token_in", "-in", str(work / "token.der"), "-data", str(work / "imprint.bin"), "-CAfile", str(root)], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 def json_verify(path, content, root, work):
     doc = json.loads(path.read_bytes())

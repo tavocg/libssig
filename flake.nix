@@ -30,6 +30,9 @@
               cmake
               opensc
               pcsc-tools
+              (python3.withPackages (pythonPkgs: with pythonPkgs; [
+                cryptography lxml jsonschema pyhanko
+              ]))
             ];
 
             nativeBuildInputs = with pkgs; [

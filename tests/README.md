@@ -271,7 +271,7 @@ servicios locales en memoria, sin red ni tarjeta. Prueba las nueve
 combinaciones de algoritmo/hash, contenido CAdES incluido/separado, DSS PDF,
 OCSP/CRL, errores de TSA, revocación y alteraciones de evidencia protegida.
 
-Para la comprobación independiente opcional con pyHanko y OpenSSL, ver
+Para la comprobación independiente con pyHanko y OpenSSL, ver
 [doc/profiles.md](../doc/profiles.md). No es una dependencia de compilación.
 
 Historical validation (offline, synthetic roots):
@@ -300,17 +300,33 @@ B-B-to-LTA extension, archive renewal, separate request/response timestamping,
 nonce mismatch, invalid payloads, duplicate XML IDs, missing validation data,
 DTD rejection, duplicate JSON members and 600 parser mutations/truncations.
 
-Optional independent checks use Python with cryptography, lxml and jsonschema:
+Independent conformance checks run by default with the rest of CTest. The
+ETSI schemas are pinned Git submodules under `tests/standards/`; the W3C import
+is retained locally with its original license. These are structural schemas,
+not a complete official ETSI conformance certification suite.
 
 ```sh
-python tests/document_interop.py build/tests/document-fixtures
-python tests/document_schema.py build/tests/document-fixtures /tmp/libssig-standards
+git submodule update --init --recursive
+nix develop --command cmake -S . -B build
+nix develop --command cmake --build build --parallel
+nix develop --command ctest --test-dir build --output-on-failure
+# Only independent checks; CTest also runs their fixture generators:
+nix develop --command ctest --test-dir build -L conformance --output-on-failure
 ```
 
-The second command expects unmodified official schemas downloaded under
-`xades-schemas/` from ETSI's `esi/x19_13201_XAdES` tag `v1.3.1`, under
-`jades-schemas/` from `esi/x19_182_JAdES` tag `v1.2.1`, and the W3C
-`xmldsig-core-schema.xsd` file in the parent directory. It performs no downloads.
-The first command independently recomputes signatures and archive inputs and
-checks timestamps with OpenSSL. The existing `ades_interop.py` checks CAdES
-ATSv3 independently and PAdES with pyHanko.
+Without Nix, install `tests/requirements.txt` in a Python 3.10+ environment
+before configuring, and set `-DPython3_EXECUTABLE=/path/to/venv/bin/python`.
+CMake and CTest never install packages or fetch schemas. Missing dependencies
+or submodules cause an actionable configure error. To deliberately build just
+the C tests, use `-DLIBSSIG_TEST_CONFORMANCE=OFF`; `BUILD_TESTING=OFF` also removes
+all test dependencies. Normal application/library builds need no submodules.
+
+`ades_interop` checks CAdES ATSv3 and PAdES LTA/renewal using pyHanko/OpenSSL.
+`document_interop` independently verifies 144 JSON/XML signatures and their
+RFC 3161 timestamps. `document_schema` applies unmodified official schemas.
+They use CTest fixtures, so selection by `-R`/`-L`, parallel execution, and
+running from an empty build fixture directory remain supported.
+
+The same `tests/CMakeLists.txt` can be added by a consumer against an imported
+`libssig::ssig` target. CRSign reuses it through a pinned libssig submodule.
+See [standards/README.md](standards/README.md) for upstream versions and licenses.

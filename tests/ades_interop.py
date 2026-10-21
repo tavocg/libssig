@@ -27,6 +27,8 @@ class HashIndex(core.Sequence):
     _fields = [('algorithm', algos.DigestAlgorithm), ('certs', Hashes),
                ('revocations', Hashes), ('attributes', Hashes)]
 
+OPENSSL = sys.argv[2] if len(sys.argv) > 2 else "openssl"
+
 root = Path(sys.argv[1]).resolve()
 trust = [x509.Certificate.load(pem.unarmor((root / name).read_bytes())[2])
          for name in ['cades-0-0.pem', 'ades-tsa-root.pem']]
@@ -81,7 +83,7 @@ for filename in ['ades-level-3.p7m', 'ades-renewed.p7m']:
     with tempfile.TemporaryDirectory(prefix='libssig-ats-interop-') as directory:
         path = Path(directory) / 'archive.der'
         path.write_bytes(token.dump())
-        subprocess.run(['openssl', 'ts', '-verify', '-token_in', '-in', str(path),
+        subprocess.run([OPENSSL, 'ts', '-verify', '-token_in', '-in', str(path),
                         '-digest', digest(imprint_input).hex(),
                         '-CAfile', str(root / 'ades-tsa-root.pem')], check=True)
     print('CAdES ATSv3: independent hash-index/imprint calculation and OpenSSL verification passed')

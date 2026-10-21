@@ -1,0 +1,8 @@
+# Offline conformance runners; installed before configure, never by CMake/CTest.
+# Nix users get an equivalent pinned environment from flake.lock.
+asn1crypto==1.5.1
+cryptography==50.0.2
+lxml==6.1.3
+jsonschema==4.26.0
+pyHanko==0.38.0
+pyhanko-certvalidator==0.33.0

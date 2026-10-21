@@ -1,0 +1,6 @@
+[submodule "tests/standards/xades"]
+	path = tests/standards/xades
+	url = https://forge.etsi.org/rep/esi/x19_13201_XAdES.git
+[submodule "tests/standards/jades"]
+	path = tests/standards/jades
+	url = https://forge.etsi.org/rep/esi/x19_182_JAdES.git

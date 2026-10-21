@@ -1,0 +1,2 @@
+# Preserve this upstream W3C schema byte-for-byte, including original whitespace.
+tests/standards/xmldsig-core-schema.xsd -whitespace
