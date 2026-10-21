@@ -1,11 +1,6 @@
-# libssig (WIP)
+# libssig
 
-A small C library for digital signing using PKCS#11 through `p11-kit`.
-
-## Bindings (TBD)
-
-- Python: [tavocg/pyssig](https://github.com/tavocg/pyssig)
-- Go: [tavocg/go-ssig](https://github.com/tavocg/go-ssig)
+C library for digital signing using PKCS#11 through `p11-kit`.
 
 ## Public interface
 
