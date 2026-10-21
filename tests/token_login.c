@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-#include <libssig/internal.h>
+#include <libssig/session.h>
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <stdio.h>

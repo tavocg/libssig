@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include <errno.h>
 #include <fcntl.h>
-#include <libssig/internal.h>
+#include <libssig/sign/internal.h>
 #include <limits.h>
 #include <openssl/crypto.h>
 #include <openssl/ecdsa.h>

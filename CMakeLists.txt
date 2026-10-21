@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Gustavo Calvo <tavo@tavo.cr>
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# See libssig/libssig.c for the full copyright and warranty notice.
+# See libssig/version.c for the full copyright and warranty notice.
 # See LICENSE in the project root for the GNU General Public License.
 
 cmake_minimum_required(VERSION 3.16)
@@ -72,9 +72,15 @@ install(TARGETS ssig
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
-install(FILES libssig/libssig.h
+install(FILES libssig/libssig.h libssig/types.h libssig/version.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libssig
 )
+
+foreach(feature context tokens certificates sign extend verify timestamp ocsp)
+    install(FILES libssig/${feature}/${feature}.h
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libssig/${feature}
+    )
+endforeach()
 
 install(EXPORT libssigTargets
     FILE libssigTargets.cmake

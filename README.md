@@ -80,6 +80,13 @@ OCSP APIs extract responder URLs, generate requests and validate responses.
 Verification accepts separate OCSP evidence for document and TSA certificates.
 See [OCSP](doc/ocsp.md).
 
+## Source layout
+
+Each public feature lives in `libssig/<feature>/`, with its interface in
+`<feature>.h` and private helpers beside it. Shared implementation lives directly
+in `libssig/`; versioning also stays there. `libssig/libssig.h` includes every
+public interface. Only public headers are installed.
+
 ## Build
 
 Requires CMake 3.16 or newer, a C99 compiler, `pkg-config`, and the development

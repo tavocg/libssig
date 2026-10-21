@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-#include <libssig/internal.h>
+#include <libssig/sign/mime.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

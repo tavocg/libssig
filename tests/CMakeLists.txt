@@ -2,7 +2,7 @@
 # Copyright (C) 2026 Gustavo Calvo <tavo@tavo.cr>
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# See libssig/libssig.c for the full copyright and warranty notice.
+# See libssig/version.c for the full copyright and warranty notice.
 # See LICENSE in the project root for the GNU General Public License.
 
 add_executable(noop_test noop_test.c)
@@ -46,8 +46,8 @@ add_test(NAME version COMMAND version_test)
 
 # Compile the implementation with a simulated module loader for lifecycle checks.
 add_executable(context_test context_test.c
-    ../libssig/context.c ../libssig/tokens.c
-    ../libssig/certificates.c ../libssig/certificate_metadata.c ../libssig/session.c)
+    ../libssig/context/context.c ../libssig/tokens/tokens.c
+    ../libssig/certificates/certificates.c ../libssig/certificates/metadata.c ../libssig/session.c)
 target_include_directories(context_test PRIVATE ${PROJECT_SOURCE_DIR})
 target_link_libraries(context_test PRIVATE PkgConfig::P11_KIT OpenSSL::Crypto)
 target_compile_options(context_test PRIVATE -Wall -Wextra -Wpedantic -Werror)

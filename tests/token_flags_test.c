@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
-#include <libssig/internal.h>
+#include <libssig/session.h>
 #include <limits.h>
 #include <p11-kit/p11-kit.h>
 #include <stdio.h>

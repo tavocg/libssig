@@ -4,7 +4,7 @@
 #define main timestamp_fixture_main
 #include "timestamp_test.c"
 #undef main
-#include <libssig/ades_internal.h>
+#include <libssig/extend/internal.h>
 
 static int  timestamp_calls;
 static int  ocsp_calls;

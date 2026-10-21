@@ -2,7 +2,7 @@
 #define main timestamp_fixture_main
 #include "timestamp_test.c"
 #undef main
-#include <libssig/ades_internal.h>
+#include <libssig/extend/internal.h>
 
 static time_t signed_at;
 static int signing_time(TS_RESP_CTX* ctx, void* user, long* sec, long* usec) {
