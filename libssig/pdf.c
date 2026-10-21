@@ -121,7 +121,10 @@ libssig_status libssig_pdf_open(
 	return LIBSSIG_OK;
 }
 void libssig_pdf_close(libssig_pdf_revision* r) {
-	qpdf_cleanup(&r->pdf);
+	if (r->pdf) {
+		qpdf_cleanup(&r->pdf);
+	}
+
 	BIO_free(r->bytes);
 	*r = (libssig_pdf_revision){0};
 }

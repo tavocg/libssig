@@ -9,6 +9,7 @@
 static int  timestamp_calls;
 static int  ocsp_calls;
 static bool fail_archive;
+static bool fail_validation;
 static bool revoked_reply;
 
 static libssig_status exchange(
@@ -21,6 +22,9 @@ static libssig_status exchange(
 ) {
 	(void)user;
 	(void)url;
+	if (fail_validation && kind != LIBSSIG_FETCH_TIMESTAMP) {
+		return LIBSSIG_ERROR_TIMESTAMP;
+	}
 	if (kind == LIBSSIG_FETCH_TIMESTAMP) {
 		++timestamp_calls;
 		if (fail_archive && timestamp_calls > 1) {
@@ -475,6 +479,18 @@ int LIBSSIG_ADES_FIXTURE_MAIN(int argc, char** argv) {
 		libssig_verify_free(&result);
 		libssig_signature_free(&output);
 	}
+	/* Validation fails before a PDF revision is opened: cleanup must be safe.
+	 */
+	libssig_extend_params failed = params;
+	failed.data = pdf.data;
+	failed.data_len = pdf.len;
+	failed.level = LIBSSIG_LEVEL_B_LTA;
+	libssig_signature failed_output = {0};
+	fail_validation = true;
+	CHECK(libssig_extend(&failed, &failed_output) != LIBSSIG_OK);
+	CHECK(!failed_output.data && !failed_output.len);
+	libssig_signature_free(&failed_output);
+	fail_validation = false;
 	free(pdf.data);
 	for (int algo = 0; algo < 3; ++algo) {
 		for (int hash = 0; hash < 3; ++hash) {
