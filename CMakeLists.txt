@@ -7,7 +7,7 @@
 
 cmake_minimum_required(VERSION 3.16)
 
-project(libssig VERSION 0.1.2 LANGUAGES C)
+project(libssig VERSION 0.1.3 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -52,7 +52,28 @@ target_link_libraries(ssig PRIVATE
     ${QPDF_LIBRARY}
 )
 
+option(LIBSSIG_EMBED_MAGIC_DATABASE "Embed a matching libmagic database for portable packages" OFF)
+if(LIBSSIG_EMBED_MAGIC_DATABASE)
+    find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
+    find_package(ZLIB REQUIRED)
+    pkg_get_variable(MAGIC_PREFIX libmagic prefix)
+    find_file(LIBSSIG_MAGIC_DATABASE NAMES magic.mgc
+        HINTS "${MAGIC_PREFIX}/share/misc" "${MAGIC_PREFIX}/share/file")
+    if(NOT LIBSSIG_MAGIC_DATABASE)
+        message(FATAL_ERROR "Set LIBSSIG_MAGIC_DATABASE to the database matching libmagic")
+    endif()
+    set(MAGIC_EMBED_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/magic_database.c")
+    add_custom_command(OUTPUT "${MAGIC_EMBED_SOURCE}"
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_magic.py"
+            "${LIBSSIG_MAGIC_DATABASE}" "${MAGIC_EMBED_SOURCE}"
+        DEPENDS "${LIBSSIG_MAGIC_DATABASE}" cmake/embed_magic.py VERBATIM)
+    target_sources(ssig PRIVATE "${MAGIC_EMBED_SOURCE}")
+    target_compile_definitions(ssig PRIVATE LIBSSIG_EMBED_MAGIC_DATABASE)
+    target_link_libraries(ssig PRIVATE ZLIB::ZLIB)
+endif()
+
 if(WIN32)
+    set_target_properties(ssig PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
     target_link_libraries(ssig PRIVATE crypt32)
 elseif(APPLE)
     if(CMAKE_OSX_DEPLOYMENT_TARGET AND CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS 10.14)
@@ -80,6 +101,7 @@ target_compile_options(ssig PRIVATE
 set_target_properties(ssig PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION 0
+    MACOSX_RPATH ON
 )
 
 if(BUILD_TESTING)
@@ -90,6 +112,7 @@ install(TARGETS ssig
     EXPORT libssigTargets
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
 install(FILES libssig/libssig.h libssig/types.h libssig/version.h

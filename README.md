@@ -171,3 +171,15 @@ Copyright (C) 2026 Gustavo Calvo <tavo@tavo.cr>.
 Licensed under the GNU General Public License, version 3 or any later version
 (SPDX: `GPL-3.0-or-later`). See [LICENSE](LICENSE) for the full terms.
 This software is provided without any warranty.
+
+## Portable builds
+
+On Windows, CMake exports DLL symbols and installs the import archive alongside
+its CMake package, so an installed build can be consumed normally. macOS dylibs
+use rpath identities. Optional `LIBSSIG_EMBED_MAGIC_DATABASE=ON` embeds a compressed
+matching `magic.mgc` and adds Python >= 3.10 and zlib as build dependencies.
+Set `LIBSSIG_MAGIC_DATABASE` if pkg-config's libmagic prefix does not locate it.
+The database is decompressed into owned writable memory during detection and
+loaded through `magic_load_buffers`; no installation path is needed. An explicit
+`MAGIC` environment setting keeps the previous file-loading behavior and errors.
+The default library build continues to use the externally installed database.
