@@ -95,6 +95,38 @@ OCSP APIs extract responder URLs, generate requests and validate responses.
 Verification accepts separate OCSP evidence for document and TSA certificates.
 See [OCSP](doc/ocsp.md).
 
+## System trust
+
+`SYSTEM_TRUST` options use OpenSSL's default CA locations and environment
+variables. On Windows, public certificates come from CurrentUser `ROOT` and
+`CA` (including inherited LocalMachine stores). On macOS, system anchors,
+user/admin trust-settings certificates and the default keychain certificate
+search list supply candidates. No private keys are accessed or stores modified.
+
+A chain anchored in an imported native certificate must pass OpenSSL validation
+and offline native evaluation of the exact same chain at the verification time.
+Windows uses Crypt32's base chain policy and requests the timestamp EKU for
+TSA validation; macOS uses Security's basic X.509 or timestamp policy. Native
+policy failures return `X509_V_ERR_CERT_REJECTED`. Candidate intermediates alone
+cannot establish trust. No issuer/revocation downloads are enabled; the existing
+OCSP and protected revocation evidence checks remain in force.
+
+Explicit `ca_data` anchors and OpenSSL's configured default roots retain their
+independent trust, including when the same certificate exists natively. Native
+trust uses current OS trust settings, even when verifying a historical chain.
+Different native/OpenSSL chain choices are rejected rather than assuming the
+native decision applies to another chain. This can reject an otherwise valid
+alternative route; callers can supply an explicit anchor when appropriate.
+
+For consumers already using OpenSSL, the optional public header
+`<libssig/trust_store.h>` exposes `libssig_trust_store_load_system(X509_STORE*)`
+(added in 0.1.2). Add explicit anchors before calling it, check its status, keep
+its verification callback, then free the store normally. The ordinary public
+signing and verification headers still require no OpenSSL headers.
+Native backends require OpenSSL >= 3.5 (public purpose accessor), Crypt32 on
+Windows, Security/CoreFoundation on macOS >= 10.14. Linux retains OpenSSL >= 3.0.
+See `tests/system_trust` for a standalone suite needing only OpenSSL and CMake.
+
 ## Source layout
 
 Features with multiple implementation files live in `libssig/<feature>/`,

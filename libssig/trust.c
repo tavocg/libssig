@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include <libssig/trust.h>
+#include <libssig/trust_store.h>
 #include <openssl/ess.h>
 #include <openssl/pem.h>
 #include <string.h>
@@ -120,14 +121,16 @@ libssig_status libssig_verify_store_create(
 		return LIBSSIG_ERROR_MEMORY;
 	}
 
-	if ((params->options & LIBSSIG_VERIFY_SYSTEM_TRUST) &&
-	    X509_STORE_set_default_paths(*out_store) != 1) {
-		return LIBSSIG_ERROR_TRUST;
-	}
-
 	for (int i = 0; i < sk_X509_num(roots); ++i) {
 		if (!X509_STORE_add_cert(*out_store, sk_X509_value(roots, i))) {
 			return LIBSSIG_ERROR_CRYPTO;
+		}
+	}
+	/* Explicit anchors remain an independent, higher-priority trust source. */
+	if (params->options & LIBSSIG_VERIFY_SYSTEM_TRUST) {
+		libssig_status status = libssig_trust_store_load_system(*out_store);
+		if (status != LIBSSIG_OK) {
+			return status;
 		}
 	}
 	return libssig_trust_fallback_add(

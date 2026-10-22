@@ -7,7 +7,7 @@
 
 cmake_minimum_required(VERSION 3.16)
 
-project(libssig VERSION 0.1.1 LANGUAGES C)
+project(libssig VERSION 0.1.2 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -19,7 +19,12 @@ include(CMakePackageConfigHelpers)
 include(CTest)
 
 find_package(PkgConfig REQUIRED)
-find_package(OpenSSL 3.0 REQUIRED COMPONENTS Crypto)
+if(WIN32 OR APPLE)
+    # Native policy evaluation needs the public verification-purpose accessor.
+    find_package(OpenSSL 3.5 REQUIRED COMPONENTS Crypto)
+else()
+    find_package(OpenSSL 3.0 REQUIRED COMPONENTS Crypto)
+endif()
 pkg_check_modules(P11_KIT REQUIRED IMPORTED_TARGET p11-kit-1)
 pkg_check_modules(MAGIC REQUIRED IMPORTED_TARGET libmagic)
 pkg_check_modules(JANSSON REQUIRED IMPORTED_TARGET jansson)
@@ -46,6 +51,17 @@ target_link_libraries(ssig PRIVATE
     OpenSSL::Crypto
     ${QPDF_LIBRARY}
 )
+
+if(WIN32)
+    target_link_libraries(ssig PRIVATE crypt32)
+elseif(APPLE)
+    if(CMAKE_OSX_DEPLOYMENT_TARGET AND CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS 10.14)
+        message(FATAL_ERROR "Native trust evaluation requires macOS 10.14 or newer")
+    endif()
+    find_library(SECURITY_FRAMEWORK Security REQUIRED)
+    find_library(COREFOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
+    target_link_libraries(ssig PRIVATE "${SECURITY_FRAMEWORK}" "${COREFOUNDATION_FRAMEWORK}")
+endif()
 
 target_include_directories(ssig PRIVATE ${QPDF_INCLUDE_DIR})
 
@@ -77,7 +93,7 @@ install(TARGETS ssig
 )
 
 install(FILES libssig/libssig.h libssig/types.h libssig/version.h
-    libssig/context.h libssig/tokens.h
+    libssig/context.h libssig/tokens.h libssig/trust_store.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libssig
 )
 
