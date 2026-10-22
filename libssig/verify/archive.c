@@ -37,7 +37,7 @@ static bool index_matches(
 static libssig_status archive_verify(
     CMS_ContentInfo*             cms,
     int                          signer_index,
-    ASN1_TYPE*                   value,
+    const ASN1_TYPE*                   value,
     const libssig_verify_params* params,
     libssig_verify_timestamp*    result,
     bool*                        complete
@@ -60,7 +60,7 @@ static libssig_status archive_verify(
 	ASN1_OBJECT*    oid = OBJ_txt2obj(LIBSSIG_HASH_INDEX_OID, 1);
 	int pos = s && oid ? CMS_unsigned_get_attr_by_OBJ(s, oid, -1) : -1;
 	X509_ATTRIBUTE* attr = pos >= 0 ? CMS_unsigned_get_attr(s, pos) : NULL;
-	ASN1_TYPE*      index_value = attr && X509_ATTRIBUTE_count(attr) == 1 &&
+	const ASN1_TYPE*      index_value = attr && X509_ATTRIBUTE_count(attr) == 1 &&
                                      CMS_unsigned_get_attr_by_OBJ(s, oid, pos) <
                                          0
 	                                  ? X509_ATTRIBUTE_get0_type(attr, 0)

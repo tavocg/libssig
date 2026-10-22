@@ -4,7 +4,7 @@
 int main(void) {
 	X509_STORE* store = X509_STORE_new();
 	CHECK(store && libssig_trust_store_load_system(store) == LIBSSIG_OK);
-	STACK_OF(X509_OBJECT)* objects = X509_STORE_get0_objects(store);
+	STACK_OF(X509_OBJECT)* objects = X509_STORE_get1_objects(store);
 	int error, accepted = 0;
 	for (int i = 0; i < sk_X509_OBJECT_num(objects) && !accepted; ++i) {
 		X509* cert = X509_OBJECT_get0_X509(sk_X509_OBJECT_value(objects, i));
@@ -13,6 +13,7 @@ int main(void) {
 			++accepted;
 		}
 	}
+	sk_X509_OBJECT_pop_free(objects, X509_OBJECT_free);
 	CHECK(accepted > 0); /* Exercise actual OS policy evaluation without
 	                        installing certificates. */
 	EVP_PKEY* key = EVP_PKEY_Q_keygen(NULL, NULL, "RSA", 2048);

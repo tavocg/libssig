@@ -28,7 +28,7 @@ static libssig_status mime_copy(CMS_SignerInfo* s, char** out_type) {
 		return LIBSSIG_ERROR_VERIFY;
 	}
 
-	ASN1_TYPE* value = X509_ATTRIBUTE_get0_type(attr, 0);
+	const ASN1_TYPE* value = X509_ATTRIBUTE_get0_type(attr, 0);
 	if (!value || value->type != V_ASN1_UTF8STRING) {
 		return LIBSSIG_ERROR_VERIFY;
 	}

@@ -48,16 +48,19 @@ static bool contains(const STACK_OF(X509) * certs, X509* cert) {
 	return false;
 }
 static bool cached(X509_STORE* store, X509* cert) {
-	STACK_OF(X509_OBJECT)* objects = X509_STORE_get0_objects(store);
+	STACK_OF(X509_OBJECT)* objects = X509_STORE_get1_objects(store);
+	bool found = false;
 	for (int i = 0; i < sk_X509_OBJECT_num(objects); ++i) {
 		X509* existing = X509_OBJECT_get0_X509(
 		    sk_X509_OBJECT_value(objects, i)
 		);
 		if (existing && X509_cmp(existing, cert) == 0) {
-			return true;
+			found = true;
+			break;
 		}
 	}
-	return false;
+	sk_X509_OBJECT_pop_free(objects, X509_OBJECT_free);
+	return found;
 }
 static int native_verify(int ok, X509_STORE_CTX* ctx) {
 	native_store* state = X509_STORE_get_ex_data(

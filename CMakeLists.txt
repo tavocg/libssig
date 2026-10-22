@@ -42,6 +42,8 @@ list(FILTER LIBSSIG_SOURCES EXCLUDE REGEX "_test\\.c$")
 
 add_library(ssig SHARED ${LIBSSIG_SOURCES})
 add_library(libssig::ssig ALIAS ssig)
+include(cmake/OpenSSLCompat.cmake)
+libssig_openssl_compat(ssig)
 
 target_link_libraries(ssig PRIVATE
     PkgConfig::P11_KIT

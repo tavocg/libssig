@@ -557,7 +557,7 @@ static libssig_status timestamp_collect(
 	);
 	X509_ATTRIBUTE* attr = index >= 0 ? CMS_unsigned_get_attr(signer, index)
 	                                  : NULL;
-	ASN1_TYPE*      value = attr && X509_ATTRIBUTE_count(attr) == 1
+	const ASN1_TYPE* value = attr && X509_ATTRIBUTE_count(attr) == 1
 	                            ? X509_ATTRIBUTE_get0_type(attr, 0)
 	                            : NULL;
 	if (!value || value->type != V_ASN1_SEQUENCE) {
@@ -645,7 +645,7 @@ libssig_status libssig_validation_collect(
 			for (int j = 0;
 			     status == LIBSSIG_OK && j < X509_ATTRIBUTE_count(attr);
 			     ++j) {
-				ASN1_TYPE* value = X509_ATTRIBUTE_get0_type(attr, j);
+				const ASN1_TYPE* value = X509_ATTRIBUTE_get0_type(attr, j);
 				if (!value || value->type != V_ASN1_SEQUENCE) {
 					status = LIBSSIG_ERROR_TIMESTAMP;
 					break;

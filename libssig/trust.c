@@ -142,7 +142,7 @@ libssig_status libssig_verify_store_create(
 }
 
 /* Reject duplicate attributes and multiple values instead of choosing one. */
-static ASN1_TYPE* attribute_get(CMS_SignerInfo* s, int nid, bool* valid) {
+static const ASN1_TYPE* attribute_get(CMS_SignerInfo* s, int nid, bool* valid) {
 	int i = CMS_signed_get_attr_by_NID(s, nid, -1);
 	if (i < 0) {
 		return NULL;
@@ -163,12 +163,12 @@ bool libssig_verify_ess_check(
     STACK_OF(X509) * certs
 ) {
 	bool       valid = true;
-	ASN1_TYPE* v1 = attribute_get(
+	const ASN1_TYPE* v1 = attribute_get(
 	    s,
 	    NID_id_smime_aa_signingCertificate,
 	    &valid
 	);
-	ASN1_TYPE* v2 = attribute_get(
+	const ASN1_TYPE* v2 = attribute_get(
 	    s,
 	    NID_id_smime_aa_signingCertificateV2,
 	    &valid
