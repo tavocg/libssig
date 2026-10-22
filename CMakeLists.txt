@@ -84,7 +84,7 @@ elseif(APPLE)
     target_link_libraries(ssig PRIVATE "${SECURITY_FRAMEWORK}" "${COREFOUNDATION_FRAMEWORK}")
 endif()
 
-target_include_directories(ssig PRIVATE ${QPDF_INCLUDE_DIR})
+target_include_directories(ssig SYSTEM PRIVATE ${QPDF_INCLUDE_DIR})
 
 target_include_directories(ssig PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"

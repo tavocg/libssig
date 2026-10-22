@@ -52,11 +52,12 @@ static libssig_status module_token_find(
 		return LIBSSIG_OK;
 	}
 
-	if (slot_count > SIZE_MAX / sizeof(CK_SLOT_ID)) {
+	size_t count = (size_t)slot_count;
+	if ((CK_ULONG)count != slot_count || count > SIZE_MAX / sizeof(CK_SLOT_ID)) {
 		return LIBSSIG_ERROR_MEMORY;
 	}
 
-	CK_SLOT_ID* slots = malloc((size_t)slot_count * sizeof(*slots));
+	CK_SLOT_ID* slots = malloc(count * sizeof(*slots));
 	if (!slots) {
 		return LIBSSIG_ERROR_MEMORY;
 	}

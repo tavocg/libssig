@@ -96,11 +96,13 @@ static libssig_status slots_allocate(
 		return LIBSSIG_OK;
 	}
 
-	if (slot_count > SIZE_MAX / sizeof(**out_slots)) {
+	size_t count = (size_t)slot_count;
+	if ((CK_ULONG)count != slot_count ||
+	    count > SIZE_MAX / sizeof(**out_slots)) {
 		return LIBSSIG_ERROR_MEMORY;
 	}
 
-	*out_slots = malloc((size_t)slot_count * sizeof(**out_slots));
+	*out_slots = malloc(count * sizeof(**out_slots));
 	return *out_slots ? LIBSSIG_OK : LIBSSIG_ERROR_MEMORY;
 }
 

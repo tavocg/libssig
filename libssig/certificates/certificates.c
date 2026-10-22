@@ -54,11 +54,11 @@ static libssig_status attribute_read(
 		return LIBSSIG_OK;
 	}
 
-	if (attribute.ulValueLen >= SIZE_MAX) {
+	size_t capacity = (size_t)attribute.ulValueLen;
+	if ((CK_ULONG)capacity != attribute.ulValueLen || capacity == SIZE_MAX) {
 		return LIBSSIG_ERROR_MEMORY;
 	}
 
-	size_t         capacity = (size_t)attribute.ulValueLen;
 	unsigned char* buffer = calloc(capacity + 1, 1);
 	if (!buffer) {
 		return LIBSSIG_ERROR_MEMORY;

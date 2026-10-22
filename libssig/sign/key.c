@@ -165,11 +165,12 @@ static libssig_status signature_allocate(
 		return LIBSSIG_ERROR_PKCS11;
 	}
 
-	if (!*out_capacity || *out_capacity > SIZE_MAX) {
+	size_t capacity = (size_t)*out_capacity;
+	if (!capacity || (CK_ULONG)capacity != *out_capacity) {
 		return LIBSSIG_ERROR_MEMORY;
 	}
 
-	signature->data = malloc((size_t)*out_capacity);
+	signature->data = malloc(capacity);
 	return signature->data ? LIBSSIG_OK : LIBSSIG_ERROR_MEMORY;
 }
 
