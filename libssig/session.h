@@ -7,6 +7,7 @@
 
 struct libssig_context_impl {
 	CK_FUNCTION_LIST** modules;
+	bool               explicit_modules;
 };
 
 /* El contexto debe permanecer abierto mientras existan sesiones. */

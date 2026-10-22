@@ -277,3 +277,8 @@ if(LIBSSIG_TEST_CONFORMANCE)
     set_tests_properties(document_interop document_schema PROPERTIES
         FIXTURES_REQUIRED libssig_documents LABELS "conformance" TIMEOUT 120)
 endif()
+
+add_executable(context_modules_test context_modules_test.c ../libssig/context.c)
+target_link_libraries(context_modules_test PRIVATE PkgConfig::P11_KIT)
+target_compile_options(context_modules_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME context_modules COMMAND context_modules_test)

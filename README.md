@@ -5,6 +5,7 @@ C library for digital signing using PKCS#11 through `p11-kit`.
 ## Public interface
 
 - `libssig_context_open`
+- `libssig_context_open_modules`
 - `libssig_context_close`
 - `libssig_version`
 - `libssig_tokens`
@@ -21,6 +22,25 @@ C library for digital signing using PKCS#11 through `p11-kit`.
 - `libssig_ocsp_request`
 - `libssig_ocsp_request_free`
 - `libssig_ocsp_verify`
+
+`libssig_context_open()` preserves discovery through p11-kit. To load only an
+explicit set of modules (API added in 0.1.1):
+
+```c
+const char* paths[] = {"/path/to/vendor.so", "/path/to/other.so"};
+libssig_string_list modules = {.items = paths, .count = 2};
+libssig_context ctx = {0};
+libssig_status status = libssig_context_open_modules(&ctx, &modules);
+/* Use ctx only when status == LIBSSIG_OK. */
+libssig_context_close(&ctx);
+```
+
+A NULL or empty list uses discovery. Explicit modules are loaded in managed
+p11-kit mode and all must initialize successfully. Failure releases partial state
+and leaves the context unopened; close is safe afterward. Identical path strings
+are loaded once. Paths are borrowed only during open and use p11-kit's filename
+encoding and resolution rules. Callers should supply absolute paths to avoid
+platform-dependent relative lookup. Close contexts after freeing their sessions.
 
 Get the loaded library version (each output pointer may be `NULL`):
 

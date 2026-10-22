@@ -31,8 +31,9 @@ typedef enum {
 	LIBSSIG_ERROR_EVIDENCE,
 } libssig_status;
 
-/* Arreglo dinámico; cadenas propiedad de la biblioteca.
- * Su memoria se libera junto con el resultado que lo contiene. */
+/* Lista de cadenas. En resultados, su memoria se libera con el resultado que
+ * la contiene. Como entrada, la propiedad y el tiempo de vida los define la
+ * API. */
 typedef struct {
 	const char** items;
 	size_t       count;
