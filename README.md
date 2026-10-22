@@ -89,8 +89,7 @@ Requires CMake 3.16 or newer, a C99 compiler, `pkg-config`, and the development
 packages for `p11-kit-1`, OpenSSL 3.0 or newer (`libcrypto`), `libmagic` (with its magic database), QPDF >= 11, Jansson, and libxml2.
 
 ```sh
-git submodule update --init --recursive
-cmake -S . -B build
+cmake -S . -B build -DBUILD_TESTING=OFF
 cmake --build build
 ```
 
