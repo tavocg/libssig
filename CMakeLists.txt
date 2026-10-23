@@ -25,6 +25,9 @@ if(WIN32 OR APPLE)
 else()
     find_package(OpenSSL 3.0 REQUIRED COMPONENTS Crypto)
 endif()
+# Keg-only OpenSSL headers must precede broad Homebrew dependency include
+# directories, which may expose a different OpenSSL major version.
+include_directories(BEFORE SYSTEM "${OPENSSL_INCLUDE_DIR}")
 pkg_check_modules(P11_KIT REQUIRED IMPORTED_TARGET p11-kit-1)
 pkg_check_modules(MAGIC REQUIRED IMPORTED_TARGET libmagic)
 pkg_check_modules(JANSSON REQUIRED IMPORTED_TARGET jansson)
