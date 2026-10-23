@@ -28,6 +28,7 @@
               gcc
               clang-tools
               cmake
+              poppler-utils
               opensc
               pcsc-tools
               (python3.withPackages (pythonPkgs: with pythonPkgs; [
@@ -44,6 +45,7 @@
               file
               openssl
               qpdf
+              zlib
               jansson
               libxml2
             ];

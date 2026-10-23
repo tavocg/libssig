@@ -153,20 +153,66 @@ int libssig_pdf_stream(
     const unsigned char*  data,
     size_t                len
 ) {
+	return libssig_pdf_stream_dict(r, "", data, len);
+}
+int libssig_pdf_stream_dict(
+    libssig_pdf_revision* r,
+    const char*           dictionary,
+    const unsigned char*  data,
+    size_t                len
+) {
 	int id = object_begin(r);
 	if (!id || len > INT_MAX ||
-	    BIO_printf(r->bytes, "<< /Length %zu >>\nstream\n", len) <= 0 ||
+	    BIO_printf(
+	        r->bytes,
+	        "<< /Length %zu %s >>\nstream\n",
+	        len,
+	        dictionary
+	    ) <= 0 ||
 	    BIO_write(r->bytes, data, (int)len) != (int)len ||
 	    BIO_puts(r->bytes, "\nendstream\nendobj\n") <= 0) {
 		return 0;
 	}
 	return id;
 }
+bool libssig_pdf_update(
+    libssig_pdf_revision* r,
+    qpdf_oh               object,
+    const char*           value
+) {
+	int id = qpdf_oh_get_object_id(r->pdf, object);
+	int generation = qpdf_oh_get_generation(r->pdf, object);
+	if (id <= 0 || !value || (id < r->first && r->update_count == 16)) {
+		return false;
+	}
+	if (id >= r->first) {
+		if (id >= r->next) {
+			return false;
+		}
+		r->offsets[id - r->first] = position(r);
+	} else {
+		r->updates[r->update_count].id = id;
+		r->updates[r->update_count].generation = generation;
+		r->updates[r->update_count++].offset = position(r);
+	}
+	return BIO_printf(
+	           r->bytes,
+	           "%d %d obj\n%s\nendobj\n",
+	           id,
+	           generation,
+	           value
+	       ) > 0;
+}
 static qpdf_oh reference(libssig_pdf_revision* r, int id) {
 	return qpdf_get_object_by_id(r->pdf, id, 0);
 }
-libssig_status libssig_pdf_slot(libssig_pdf_revision* r, bool timestamp) {
-	int        id = object_begin(r);
+libssig_status libssig_pdf_slot(
+    libssig_pdf_revision* r,
+    bool                  timestamp,
+    bool                  visible
+) {
+	int id = object_begin(r);
+	r->signature_id = id;
 	time_t     now = time(NULL);
 	struct tm  utc;
 	char       date[32];
@@ -222,7 +268,8 @@ libssig_status libssig_pdf_slot(libssig_pdf_revision* r, bool timestamp) {
 	    id,
 	    id
 	);
-	int     field_id = libssig_pdf_object(r, field);
+	int field_id = libssig_pdf_object(r, field);
+	r->field_id = field_id;
 	qpdf_oh form = qpdf_oh_get_key(r->pdf, r->root, "/AcroForm");
 	form = qpdf_oh_is_null(r->pdf, form) ? qpdf_oh_new_dictionary(r->pdf)
 	                                     : copy_object(r, form);
@@ -243,6 +290,15 @@ libssig_status libssig_pdf_slot(libssig_pdf_revision* r, bool timestamp) {
 	    "/SigFlags",
 	    qpdf_oh_new_integer(r->pdf, 3)
 	);
+	/* Preserve authored signature appearances when the document is opened. */
+	if (visible) {
+		qpdf_oh_replace_key(
+		    r->pdf,
+		    form,
+		    "/NeedAppearances",
+		    qpdf_oh_new_bool(r->pdf, QPDF_FALSE)
+		);
+	}
 	int form_id = libssig_pdf_object(r, qpdf_oh_unparse_resolved(r->pdf, form));
 	if (!form_id) {
 		return LIBSSIG_ERROR_CRYPTO;
@@ -259,9 +315,21 @@ libssig_status libssig_pdf_finish(
 	    qpdf_oh_unparse_resolved(r->pdf, r->root)
 	);
 	size_t xref = position(r);
-	if (!root_id ||
-	    BIO_printf(r->bytes, "xref\n%d %d\n", r->first, r->next - r->first) <=
-	        0) {
+	if (!root_id || BIO_puts(r->bytes, "xref\n") <= 0) {
+		return LIBSSIG_ERROR_CRYPTO;
+	}
+	for (size_t i = 0; i < r->update_count; ++i) {
+		if (BIO_printf(
+		        r->bytes,
+		        "%d 1\n%010zu %05d n \n",
+		        r->updates[i].id,
+		        r->updates[i].offset,
+		        r->updates[i].generation
+		    ) <= 0) {
+			return LIBSSIG_ERROR_CRYPTO;
+		}
+	}
+	if (BIO_printf(r->bytes, "%d %d\n", r->first, r->next - r->first) <= 0) {
 		return LIBSSIG_ERROR_CRYPTO;
 	}
 	for (int i = r->first; i < r->next; ++i) {

@@ -44,7 +44,7 @@ libssig_status libssig_pdf_archive(
 	                  response = {0}, token = {0}, output = {0};
 	libssig_status status = libssig_pdf_open(pdf->data, pdf->len, &revision);
 	if (status == LIBSSIG_OK) {
-		status = libssig_pdf_slot(&revision, true);
+		status = libssig_pdf_slot(&revision, true, false);
 	}
 	if (status == LIBSSIG_OK) {
 		status = libssig_pdf_finish(&revision, &placeholder);

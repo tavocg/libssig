@@ -138,7 +138,7 @@ includes every public interface. Only public headers are installed.
 ## Build
 
 Requires CMake 3.16 or newer, a C99 compiler, `pkg-config`, and the development
-packages for `p11-kit-1`, OpenSSL 3.0 or newer (`libcrypto`), `libmagic` (with its magic database), QPDF >= 11, Jansson, and libxml2.
+packages for `p11-kit-1`, OpenSSL 3.0 or newer (`libcrypto`), `libmagic` (with its magic database), QPDF >= 11, Jansson, libxml2, and zlib.
 
 ```sh
 cmake -S . -B build -DBUILD_TESTING=OFF
@@ -177,9 +177,36 @@ This software is provided without any warranty.
 On Windows, CMake exports DLL symbols and installs the import archive alongside
 its CMake package, so an installed build can be consumed normally. macOS dylibs
 use rpath identities. Optional `LIBSSIG_EMBED_MAGIC_DATABASE=ON` embeds a compressed
-matching `magic.mgc` and adds Python >= 3.10 and zlib as build dependencies.
+matching `magic.mgc` and adds Python >= 3.10 as a build dependency.
 Set `LIBSSIG_MAGIC_DATABASE` if pkg-config's libmagic prefix does not locate it.
 The database is decompressed into owned writable memory during detection and
 loaded through `magic_load_buffers`; no installation path is needed. An explicit
 `MAGIC` environment setting keeps the previous file-loading behavior and errors.
 The default library build continues to use the externally installed database.
+
+## Visible PDF signature appearances
+
+`libssig_sign_pdf(ctx, params, appearance, output)` adds an optional appearance
+without changing `libssig_sign_params` or existing signing behaviour. Set
+`params->format = LIBSSIG_FORMAT_PADES`; a NULL appearance preserves invisible
+signing. The caller decodes SVG/PNG/JPEG into straight-alpha RGBA pixels, so the
+library has no image-decoder or GUI dependency.
+
+Initialize `libssig_pdf_appearance` with a page number starting at 1, x/y at the
+image's upper-left relative to the visible page, and final width/height in PDF
+points (72 per inch). Rotation, inherited CropBox/MediaBox and UserUnit are
+handled by the library. The rectangle must fit entirely; pixel dimensions are
+limited to 4096 per axis. Pointers are borrowed during the call. The library does
+not select an aspect ratio, certificate text, timestamp text or visual design.
+
+The image is the signature field widget's normal `/AP` appearance. RGB and alpha
+image streams and the page annotation update belong to the signed revision;
+original bytes, other page annotations and the page tree are preserved. A
+visible mark does not establish certificate trust or a trusted signing time.
+The same PAdES levels and existing restrictions on encrypted/already signed PDFs
+apply. Failed signing leaves no output.
+
+For visible signing, AcroForm `/NeedAppearances` is set to false to keep viewers
+from regenerating the signed appearance. Other form fields should have their
+appearance streams prepared before signing. Invisible signing keeps the
+existing form setting.

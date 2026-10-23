@@ -7,7 +7,7 @@
 
 cmake_minimum_required(VERSION 3.16)
 
-project(libssig VERSION 0.1.3 LANGUAGES C)
+project(libssig VERSION 0.1.4 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -19,6 +19,7 @@ include(CMakePackageConfigHelpers)
 include(CTest)
 
 find_package(PkgConfig REQUIRED)
+find_package(ZLIB REQUIRED)
 if(WIN32 OR APPLE)
     # Native policy evaluation needs the public verification-purpose accessor.
     find_package(OpenSSL 3.5 REQUIRED COMPONENTS Crypto)
@@ -49,6 +50,7 @@ include(cmake/OpenSSLCompat.cmake)
 libssig_openssl_compat(ssig)
 
 target_link_libraries(ssig PRIVATE
+    ZLIB::ZLIB
     PkgConfig::P11_KIT
     PkgConfig::MAGIC
     PkgConfig::JANSSON
@@ -60,7 +62,6 @@ target_link_libraries(ssig PRIVATE
 option(LIBSSIG_EMBED_MAGIC_DATABASE "Embed a matching libmagic database for portable packages" OFF)
 if(LIBSSIG_EMBED_MAGIC_DATABASE)
     find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
-    find_package(ZLIB REQUIRED)
     pkg_get_variable(MAGIC_PREFIX libmagic prefix)
     find_file(LIBSSIG_MAGIC_DATABASE NAMES magic.mgc
         HINTS "${MAGIC_PREFIX}/share/misc" "${MAGIC_PREFIX}/share/file")
