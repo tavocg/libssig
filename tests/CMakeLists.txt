@@ -28,6 +28,20 @@ target_compile_options(noop_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
 
 add_test(NAME noop COMMAND noop_test)
 
+add_library(device_fixture MODULE device_fixture.c)
+target_link_libraries(device_fixture PRIVATE PkgConfig::P11_KIT OpenSSL::Crypto)
+set_target_properties(device_fixture PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+target_compile_options(device_fixture PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_executable(devices_test devices_test.c)
+target_link_libraries(devices_test PRIVATE libssig::ssig PkgConfig::P11_KIT)
+target_compile_options(devices_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME devices COMMAND "${CMAKE_COMMAND}" -E env
+    "LIBSSIG_DEVICE_PHASE=${CMAKE_CURRENT_BINARY_DIR}/devices-phase"
+    "LIBSSIG_DEVICE_LOG=${CMAKE_CURRENT_BINARY_DIR}/devices.log"
+    $<TARGET_FILE:devices_test> $<TARGET_FILE:device_fixture>
+    "${CMAKE_CURRENT_BINARY_DIR}/devices-phase" "${CMAKE_CURRENT_BINARY_DIR}/devices.log")
+set_tests_properties(devices PROPERTIES TIMEOUT 20)
+
 # Manual integration check using the locally configured PKCS#11 modules.
 add_executable(tokens_list tokens_list.c)
 target_link_libraries(tokens_list PRIVATE libssig::ssig PkgConfig::P11_KIT)

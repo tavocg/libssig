@@ -29,7 +29,7 @@ static bool attribute_is_unavailable(CK_RV rv) {
 	return rv == CKR_ATTRIBUTE_SENSITIVE || rv == CKR_ATTRIBUTE_TYPE_INVALID;
 }
 
-static libssig_status attribute_read(
+libssig_status libssig_attribute_read(
     libssig_session*  s,
     CK_OBJECT_HANDLE  object,
     CK_ATTRIBUTE_TYPE type,
@@ -100,7 +100,7 @@ static libssig_status certificate_read(
     libssig_certificate* cert,
     CK_RV*               out_rv
 ) {
-	libssig_status status = attribute_read(
+	libssig_status status = libssig_attribute_read(
 	    s,
 	    object,
 	    CKA_ID,
@@ -113,7 +113,7 @@ static libssig_status certificate_read(
 	}
 
 	unsigned char* label = NULL;
-	status = attribute_read(
+	status = libssig_attribute_read(
 	    s,
 	    object,
 	    CKA_LABEL,
@@ -127,7 +127,7 @@ static libssig_status certificate_read(
 		return status;
 	}
 
-	status = attribute_read(
+	status = libssig_attribute_read(
 	    s,
 	    object,
 	    CKA_VALUE,

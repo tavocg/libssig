@@ -4,6 +4,7 @@
 
 #include <libssig/certificates/certificates.h>
 #include <libssig/context.h>
+#include <libssig/devices.h>
 #include <libssig/extend/extend.h>
 #include <libssig/ocsp/ocsp.h>
 #include <libssig/sign/sign.h>

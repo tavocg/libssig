@@ -164,7 +164,7 @@ static char* token_text_copy(const CK_UTF8CHAR* text, size_t len) {
 	return copy;
 }
 
-static void token_free(libssig_token* token) {
+void libssig_token_clear(libssig_token* token) {
 	free(token->uri);
 	free(token->label);
 	free(token->manufacturer);
@@ -194,7 +194,7 @@ static libssig_status token_uri_create(
 	return uri_status == P11_KIT_URI_OK ? LIBSSIG_OK : LIBSSIG_ERROR_URI;
 }
 
-static libssig_status token_from_info(
+libssig_status libssig_token_from_info(
     const CK_TOKEN_INFO* token_info,
     libssig_token*       token
 ) {
@@ -245,19 +245,19 @@ static libssig_status token_from_info(
 
 	if (!token->label || !token->manufacturer || !token->model ||
 	    !token->serial) {
-		token_free(token);
+		libssig_token_clear(token);
 		return LIBSSIG_ERROR_MEMORY;
 	}
 
 	libssig_status status = token_flags_names(token->flags, &token->flag_names);
 	if (status != LIBSSIG_OK) {
-		token_free(token);
+		libssig_token_clear(token);
 		return status;
 	}
 
 	status = token_uri_create(token_info, &token->uri);
 	if (status != LIBSSIG_OK) {
-		token_free(token);
+		libssig_token_clear(token);
 	}
 	return status;
 }
@@ -319,13 +319,13 @@ static libssig_status tokens_collect_one(
 	}
 
 	libssig_token  token = {0};
-	libssig_status status = token_from_info(&token_info, &token);
+	libssig_status status = libssig_token_from_info(&token_info, &token);
 	if (status != LIBSSIG_OK) {
 		return status;
 	}
 
 	status = tokens_append(tokens, &token);
-	token_free(&token);
+	libssig_token_clear(&token);
 	return status;
 }
 
@@ -385,7 +385,7 @@ void libssig_tokens_free(libssig_token_list* tokens) {
 	}
 
 	for (size_t i = 0; i < tokens->count; ++i) {
-		token_free(&tokens->items[i]);
+		libssig_token_clear(&tokens->items[i]);
 	}
 
 	free(tokens->items);

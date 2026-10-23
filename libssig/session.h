@@ -35,4 +35,18 @@ libssig_status libssig_session_login(
 );
 CK_RV libssig_session_close(libssig_session* s);
 
+void           libssig_token_clear(libssig_token* token);
+libssig_status libssig_token_from_info(
+    const CK_TOKEN_INFO* info,
+    libssig_token*       token
+);
+libssig_status libssig_attribute_read(
+    libssig_session*  session,
+    CK_OBJECT_HANDLE  object,
+    CK_ATTRIBUTE_TYPE type,
+    unsigned char**   data,
+    size_t*           len,
+    CK_RV*            rv
+);
+
 #endif

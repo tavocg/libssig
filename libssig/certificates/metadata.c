@@ -18,6 +18,7 @@ void libssig_certificate_metadata_clear(libssig_certificate* cert) {
 	cert->key_usage_names = (libssig_string_list){0};
 	oid_list_clear(&cert->extended_key_usage);
 	oid_list_clear(&cert->certificate_policies);
+	cert->public_key_bits = 0;
 	cert->metadata_status = LIBSSIG_CERTIFICATE_METADATA_UNAVAILABLE;
 	cert->key_usage_present = false;
 	cert->key_usage = 0;
@@ -202,6 +203,15 @@ libssig_status libssig_certificate_metadata_read(libssig_certificate* cert) {
 	}
 
 	libssig_status status = extensions_read(x509, cert);
+	EVP_PKEY*      public_key = X509_get_pubkey(x509);
+	if (public_key) {
+		int bits = EVP_PKEY_bits(public_key);
+		if (bits > 0) {
+			cert->public_key_bits = (unsigned long)bits;
+		}
+	}
+	EVP_PKEY_free(public_key);
+
 	X509_free(x509);
 	if (status != LIBSSIG_OK) {
 		libssig_certificate_metadata_clear(cert);
