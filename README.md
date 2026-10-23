@@ -10,6 +10,9 @@ C library for digital signing using PKCS#11 through `p11-kit`.
 - `libssig_version`
 - `libssig_tokens`
 - `libssig_tokens_free`
+- `libssig_devices`
+- `libssig_devices_free`
+- `libssig_devices_changed`
 - `libssig_certificates`
 - `libssig_certificates_free`
 - `libssig_sign`
@@ -58,6 +61,10 @@ Token queries default to hardware slots when options is `0`:
 libssig_tokens(&ctx, &tokens, 0);                  /* Hardware only. */
 libssig_tokens(&ctx, &tokens, LIBSSIG_TOKENS_ALL); /* All present tokens. */
 ```
+
+Device snapshots and nonblocking change polling are available since 0.1.5.
+See [device inventory](doc/devices.md) for readers, empty slots, public key
+metadata, hardware filtering and ownership rules.
 
 Certificate queries default to certificates declaring `contentCommitment`:
 

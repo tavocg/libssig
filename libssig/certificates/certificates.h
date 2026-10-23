@@ -42,6 +42,9 @@ typedef struct {
 	unsigned char* der;
 	size_t         der_len;
 
+	/* Size of the certificate public key; zero when unavailable/invalid. */
+	unsigned long public_key_bits;
+
 	/* Extracción de metadatos; no valida confianza, vigencia ni revocación. */
 	libssig_certificate_metadata_status metadata_status;
 	bool                                key_usage_present;
