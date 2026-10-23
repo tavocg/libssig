@@ -10,6 +10,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* CK_ULONG is narrower than size_t on Win64. Keep both conversion and
+ * multiplication checks without comparing a promoted 32-bit value directly
+ * with a constant derived from 64-bit SIZE_MAX. */
+static bool allocation_fits(CK_ULONG count, size_t item_size) {
+    size_t size = (size_t)count;
+    return (CK_ULONG)size == count && size <= SIZE_MAX/item_size;
+}
 static char* text_copy(const unsigned char* text, size_t length) {
 	while (length && text[length - 1] == ' ') {
 		--length;
@@ -390,7 +397,7 @@ static libssig_status read_module(
 		if (result->ck_rv != CKR_OK) {
 			return LIBSSIG_ERROR_PKCS11;
 		}
-		if ((uintmax_t)count > SIZE_MAX / sizeof(*ids)) {
+		if (!allocation_fits(count, sizeof(*ids))) {
 			return LIBSSIG_ERROR_MEMORY;
 		}
 		CK_ULONG capacity = count;
@@ -412,7 +419,7 @@ static libssig_status read_module(
 		free(ids);
 		return LIBSSIG_ERROR_PKCS11;
 	}
-	if ((uintmax_t)count > SIZE_MAX / sizeof(*result->slots)) {
+	if (!allocation_fits(count, sizeof(*result->slots))) {
 		free(ids);
 		return LIBSSIG_ERROR_MEMORY;
 	}
@@ -511,7 +518,7 @@ libssig_status libssig_devices_changed(
 		if (rv != CKR_OK) {
 			continue;
 		}
-		if ((uintmax_t)count > SIZE_MAX / sizeof(CK_SLOT_ID)) {
+		if (!allocation_fits(count, sizeof(CK_SLOT_ID))) {
 			EVP_MD_CTX_free(hash);
 			return LIBSSIG_ERROR_MEMORY;
 		}
