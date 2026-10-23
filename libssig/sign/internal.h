@@ -83,9 +83,10 @@ unsigned char* libssig_cades_v131_attributes_encode(
 );
 
 libssig_status libssig_pades_v121_sign(
-    const libssig_context*     ctx,
-    const libssig_sign_params* params,
-    libssig_signature*         output
+    const libssig_context*        ctx,
+    const libssig_sign_params*    params,
+    const libssig_pdf_appearance* appearance,
+    libssig_signature*            output
 );
 
 #endif

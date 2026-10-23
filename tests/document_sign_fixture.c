@@ -49,11 +49,12 @@ static CK_RV document_raw_sign(
 	*out_len = (CK_ULONG)needed;
 	return ok ? CKR_OK : CKR_GENERAL_ERROR;
 }
-libssig_status document_fixture_sign(
-    EVP_PKEY*           key,
-    X509*               cert,
-    libssig_sign_params params,
-    libssig_signature*  output
+libssig_status document_fixture_sign_pdf(
+    EVP_PKEY*                     key,
+    X509*                         cert,
+    libssig_sign_params           params,
+    libssig_signature*            output,
+    const libssig_pdf_appearance* appearance
 ) {
 	static const CK_MECHANISM_TYPE mechanisms[3][3] = {
 	    {CKM_SHA256_RSA_PKCS, CKM_SHA384_RSA_PKCS, CKM_SHA512_RSA_PKCS},
@@ -107,7 +108,13 @@ libssig_status document_fixture_sign(
 	params.pin_len = 4;
 	unsigned int   before_sign = sign_count, before_login = login_count;
 	unsigned int   before_close = close_count, before_final = final_count;
-	libssig_status status = libssig_sign(&ctx, &params, output);
+	libssig_status status = appearance ? libssig_sign_pdf(
+	                                         &ctx,
+	                                         &params,
+	                                         appearance,
+	                                         output
+	                                     )
+	                                   : libssig_sign(&ctx, &params, output);
 	if (status == LIBSSIG_OK &&
 	    (sign_count != before_sign + 1 || login_count != before_login + 1 ||
 	     close_count != before_close + 1 || final_count != before_final + 1)) {
@@ -115,4 +122,13 @@ libssig_status document_fixture_sign(
 	}
 	OPENSSL_free(der);
 	return status;
+}
+
+libssig_status document_fixture_sign(
+    EVP_PKEY*           key,
+    X509*               cert,
+    libssig_sign_params params,
+    libssig_signature*  output
+) {
+	return document_fixture_sign_pdf(key, cert, params, output, NULL);
 }

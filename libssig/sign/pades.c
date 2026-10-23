@@ -41,10 +41,11 @@ static bool signed_fields(
 }
 
 static libssig_status pdf_signature(
-    const libssig_context*     ctx,
-    const libssig_sign_params* params,
-    libssig_signature*         pdf,
-    CMS_ContentInfo**          out_cms
+    const libssig_context*        ctx,
+    const libssig_sign_params*    params,
+    const libssig_pdf_appearance* appearance,
+    libssig_signature*            pdf,
+    CMS_ContentInfo**             out_cms
 ) {
 	libssig_pdf_revision revision = {0};
 	libssig_signature    placeholder = {0}, content = {0}, signature = {0};
@@ -69,7 +70,10 @@ static libssig_status pdf_signature(
 		}
 	}
 	if (status == LIBSSIG_OK) {
-		status = libssig_pdf_slot(&revision, false);
+		status = libssig_pdf_slot(&revision, false, appearance != NULL);
+	}
+	if (status == LIBSSIG_OK && appearance) {
+		status = libssig_pdf_appearance_apply(&revision, appearance);
 	}
 	if (status == LIBSSIG_OK) {
 		status = libssig_pdf_finish(&revision, &placeholder);
@@ -130,15 +134,17 @@ static libssig_status pdf_signature(
 	return status;
 }
 libssig_status libssig_pades_v121_sign(
-    const libssig_context*     ctx,
-    const libssig_sign_params* params,
-    libssig_signature*         output
+    const libssig_context*        ctx,
+    const libssig_sign_params*    params,
+    const libssig_pdf_appearance* appearance,
+    libssig_signature*            output
 ) {
 	if (params->options & LIBSSIG_SIGN_DETACHED) {
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
 	CMS_ContentInfo* cms = NULL;
-	libssig_status   status = pdf_signature(ctx, params, output, &cms);
+	libssig_status
+	    status = pdf_signature(ctx, params, appearance, output, &cms);
 	if (status == LIBSSIG_OK) {
 		status = libssig_pades_v121_finish(params, cms, output);
 	}

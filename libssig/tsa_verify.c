@@ -92,7 +92,7 @@ static libssig_status attribute_decode(
 		return LIBSSIG_ERROR_FORMAT;
 	}
 
-	ASN1_TYPE* value = X509_ATTRIBUTE_get0_type(attr, 0);
+	const ASN1_TYPE* value = X509_ATTRIBUTE_get0_type(attr, 0);
 	if (!value || value->type != V_ASN1_SEQUENCE) {
 		return LIBSSIG_ERROR_FORMAT;
 	}

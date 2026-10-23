@@ -595,7 +595,7 @@ static libssig_status timestamp_certs_add(
 	    -1
 	);
 	X509_ATTRIBUTE* attr = pos >= 0 ? CMS_unsigned_get_attr(s, pos) : NULL;
-	ASN1_TYPE*      value = attr ? X509_ATTRIBUTE_get0_type(attr, 0) : NULL;
+	const ASN1_TYPE* value = attr ? X509_ATTRIBUTE_get0_type(attr, 0) : NULL;
 	if (!value || value->type != V_ASN1_SEQUENCE) {
 		return LIBSSIG_ERROR_EVIDENCE;
 	}

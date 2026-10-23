@@ -63,6 +63,31 @@ libssig_status libssig_sign(
     libssig_signature*         signature
 );
 
+/* Visible PDF signature appearance. Coordinates and dimensions are PDF points
+ * (72 per inch), measured from the visible page's upper-left after rotation.
+ * page_number starts at 1. Pixels are straight-alpha RGBA, top row first;
+ * row_stride >= pixel_width * 4. All pointers are borrowed during signing.
+ * The appearance is the signature widget's /AP, covered by its ByteRange.
+ * It does not assert certificate trust or a trusted timestamp. */
+typedef struct {
+	unsigned int         page_number;
+	double               x, y, width, height;
+	const unsigned char* pixels;
+	size_t               pixel_width, pixel_height, row_stride;
+} libssig_pdf_appearance;
+
+/* Same signing parameters and guarantees as libssig_sign, with format=PADES.
+ * NULL appearance preserves the invisible signature. Image dimensions are
+ * limited to 4096 pixels per axis and 16 Mi pixels; the rectangle must fit
+ * entirely in the CropBox (or MediaBox) after rotation and UserUnit scaling.
+ * Failure leaves output empty and never modifies the input bytes. */
+libssig_status libssig_sign_pdf(
+    const libssig_context*        ctx,
+    const libssig_sign_params*    params,
+    const libssig_pdf_appearance* appearance,
+    libssig_signature*            signature
+);
+
 /* Application-owned transport; no HTTP implementation inside libssig.
  * request=NULL means GET (issuer certificate or CRL); otherwise POST.
  * response owns malloc-compatible memory, released with signature_free.

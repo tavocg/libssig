@@ -78,7 +78,13 @@ static int fallback_subject(
 
 /* A cached primary certificate can have the right DN but a different AKI.
  * Consult fallback candidates only when primary issuer selection found none. */
-static int fallback_issuer(X509** issuer, X509_STORE_CTX* ctx, X509* cert) {
+static int fallback_issuer(X509** issuer, X509_STORE_CTX* ctx,
+#ifdef LIBSSIG_OPENSSL_CONST_ISSUER
+                           const X509* cert
+#else
+                           X509* cert
+#endif
+) {
 	int found = X509_STORE_CTX_get1_issuer(issuer, ctx, cert);
 	if (found != 0) {
 		return found;

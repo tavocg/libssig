@@ -14,6 +14,12 @@ typedef struct {
 	int       first, next;
 	size_t    offsets[2048];
 	size_t    range_offset, content_start, content_end;
+	int       field_id, signature_id;
+	struct {
+		int    id, generation;
+		size_t offset;
+	} updates[16];
+	size_t update_count;
 } libssig_pdf_revision;
 libssig_status libssig_pdf_open(
     const unsigned char*  data,
@@ -27,7 +33,26 @@ int  libssig_pdf_stream(
      const unsigned char*  data,
      size_t                len
  );
-libssig_status libssig_pdf_slot(libssig_pdf_revision* revision, bool timestamp);
+int libssig_pdf_stream_dict(
+    libssig_pdf_revision* revision,
+    const char*           dictionary,
+    const unsigned char*  data,
+    size_t                len
+);
+bool libssig_pdf_update(
+    libssig_pdf_revision* revision,
+    qpdf_oh               object,
+    const char*           value
+);
+libssig_status libssig_pdf_appearance_apply(
+    libssig_pdf_revision*         revision,
+    const libssig_pdf_appearance* appearance
+);
+libssig_status libssig_pdf_slot(
+    libssig_pdf_revision* revision,
+    bool                  timestamp,
+    bool                  visible
+);
 libssig_status libssig_pdf_finish(
     libssig_pdf_revision* revision,
     libssig_signature*    output

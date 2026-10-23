@@ -2,7 +2,7 @@
 #include "internal.h"
 #include <string.h>
 
-static ASN1_TYPE* signed_attribute(CMS_SignerInfo* s, int nid) {
+static const ASN1_TYPE* signed_attribute(CMS_SignerInfo* s, int nid) {
 	int pos = CMS_signed_get_attr_by_NID(s, nid, -1);
 	if (pos < 0 || CMS_signed_get_attr_by_NID(s, nid, pos) >= 0) {
 		return NULL;
@@ -13,13 +13,13 @@ static ASN1_TYPE* signed_attribute(CMS_SignerInfo* s, int nid) {
 }
 
 static bool baseline_present(CMS_SignerInfo* s, bool pades) {
-	ASN1_TYPE* type = signed_attribute(s, NID_pkcs9_contentType);
-	ASN1_TYPE* digest = signed_attribute(s, NID_pkcs9_messageDigest);
-	ASN1_TYPE* cert = signed_attribute(s, NID_id_smime_aa_signingCertificateV2);
+	const ASN1_TYPE* type = signed_attribute(s, NID_pkcs9_contentType);
+	const ASN1_TYPE* digest = signed_attribute(s, NID_pkcs9_messageDigest);
+	const ASN1_TYPE* cert = signed_attribute(s, NID_id_smime_aa_signingCertificateV2);
 	if (!cert) {
 		cert = signed_attribute(s, NID_id_smime_aa_signingCertificate);
 	}
-	ASN1_TYPE* generated = signed_attribute(s, NID_pkcs9_signingTime);
+	const ASN1_TYPE* generated = signed_attribute(s, NID_pkcs9_signingTime);
 	bool       time_valid = generated &&
 	                  (generated->type == V_ASN1_UTCTIME ||
 	                   generated->type == V_ASN1_GENERALIZEDTIME) &&

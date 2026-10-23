@@ -277,3 +277,33 @@ if(LIBSSIG_TEST_CONFORMANCE)
     set_tests_properties(document_interop document_schema PROPERTIES
         FIXTURES_REQUIRED libssig_documents LABELS "conformance" TIMEOUT 120)
 endif()
+
+add_executable(context_modules_test context_modules_test.c ../libssig/context.c)
+target_link_libraries(context_modules_test PRIVATE PkgConfig::P11_KIT)
+target_compile_options(context_modules_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+add_test(NAME context_modules COMMAND context_modules_test)
+
+if(OPENSSL_VERSION VERSION_GREATER_EQUAL 3.5)
+    add_subdirectory(system_trust)
+endif()
+
+# Appearance placement uses real CMS signing and preserves the original PDF revision.
+find_path(QPDF_INCLUDE_DIR qpdf/qpdf-c.h REQUIRED)
+find_library(QPDF_LIBRARY qpdf REQUIRED)
+add_executable(pdf_appearance_test pdf_appearance_test.c document_sign_fixture.c)
+target_link_libraries(pdf_appearance_test PRIVATE libssig::ssig OpenSSL::Crypto PkgConfig::P11_KIT ${QPDF_LIBRARY})
+target_include_directories(pdf_appearance_test SYSTEM PRIVATE "${QPDF_INCLUDE_DIR}")
+target_compile_options(pdf_appearance_test PRIVATE -Wall -Wextra -Wpedantic -Werror)
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/appearance-fixtures")
+add_test(NAME pdf_appearance COMMAND pdf_appearance_test "${CMAKE_CURRENT_BINARY_DIR}/appearance-fixtures")
+set_tests_properties(pdf_appearance PROPERTIES FIXTURES_SETUP libssig_appearance)
+find_program(PDFTOPPM_EXECUTABLE pdftoppm)
+if(PDFTOPPM_EXECUTABLE)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+endif()
+if(PDFTOPPM_EXECUTABLE AND Python3_Interpreter_FOUND)
+    add_test(NAME pdf_appearance_render COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_CURRENT_SOURCE_DIR}/pdf_appearance_render.py" "${PDFTOPPM_EXECUTABLE}"
+        "${CMAKE_CURRENT_BINARY_DIR}/appearance-fixtures")
+    set_tests_properties(pdf_appearance_render PROPERTIES FIXTURES_REQUIRED libssig_appearance)
+endif()

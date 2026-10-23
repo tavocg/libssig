@@ -7,7 +7,7 @@
 
 cmake_minimum_required(VERSION 3.16)
 
-project(libssig VERSION 0.1.0 LANGUAGES C)
+project(libssig VERSION 0.1.4 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -19,7 +19,16 @@ include(CMakePackageConfigHelpers)
 include(CTest)
 
 find_package(PkgConfig REQUIRED)
-find_package(OpenSSL 3.0 REQUIRED COMPONENTS Crypto)
+find_package(ZLIB REQUIRED)
+if(WIN32 OR APPLE)
+    # Native policy evaluation needs the public verification-purpose accessor.
+    find_package(OpenSSL 3.5 REQUIRED COMPONENTS Crypto)
+else()
+    find_package(OpenSSL 3.0 REQUIRED COMPONENTS Crypto)
+endif()
+# Keg-only OpenSSL headers must precede broad Homebrew dependency include
+# directories, which may expose a different OpenSSL major version.
+include_directories(BEFORE SYSTEM "${OPENSSL_INCLUDE_DIR}")
 pkg_check_modules(P11_KIT REQUIRED IMPORTED_TARGET p11-kit-1)
 pkg_check_modules(MAGIC REQUIRED IMPORTED_TARGET libmagic)
 pkg_check_modules(JANSSON REQUIRED IMPORTED_TARGET jansson)
@@ -37,8 +46,11 @@ list(FILTER LIBSSIG_SOURCES EXCLUDE REGEX "_test\\.c$")
 
 add_library(ssig SHARED ${LIBSSIG_SOURCES})
 add_library(libssig::ssig ALIAS ssig)
+include(cmake/OpenSSLCompat.cmake)
+libssig_openssl_compat(ssig)
 
 target_link_libraries(ssig PRIVATE
+    ZLIB::ZLIB
     PkgConfig::P11_KIT
     PkgConfig::MAGIC
     PkgConfig::JANSSON
@@ -47,7 +59,38 @@ target_link_libraries(ssig PRIVATE
     ${QPDF_LIBRARY}
 )
 
-target_include_directories(ssig PRIVATE ${QPDF_INCLUDE_DIR})
+option(LIBSSIG_EMBED_MAGIC_DATABASE "Embed a matching libmagic database for portable packages" OFF)
+if(LIBSSIG_EMBED_MAGIC_DATABASE)
+    find_package(Python3 3.10 REQUIRED COMPONENTS Interpreter)
+    pkg_get_variable(MAGIC_PREFIX libmagic prefix)
+    find_file(LIBSSIG_MAGIC_DATABASE NAMES magic.mgc
+        HINTS "${MAGIC_PREFIX}/share/misc" "${MAGIC_PREFIX}/share/file")
+    if(NOT LIBSSIG_MAGIC_DATABASE)
+        message(FATAL_ERROR "Set LIBSSIG_MAGIC_DATABASE to the database matching libmagic")
+    endif()
+    set(MAGIC_EMBED_SOURCE "${CMAKE_CURRENT_BINARY_DIR}/magic_database.c")
+    add_custom_command(OUTPUT "${MAGIC_EMBED_SOURCE}"
+        COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_magic.py"
+            "${LIBSSIG_MAGIC_DATABASE}" "${MAGIC_EMBED_SOURCE}"
+        DEPENDS "${LIBSSIG_MAGIC_DATABASE}" cmake/embed_magic.py VERBATIM)
+    target_sources(ssig PRIVATE "${MAGIC_EMBED_SOURCE}")
+    target_compile_definitions(ssig PRIVATE LIBSSIG_EMBED_MAGIC_DATABASE)
+    target_link_libraries(ssig PRIVATE ZLIB::ZLIB)
+endif()
+
+if(WIN32)
+    set_target_properties(ssig PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+    target_link_libraries(ssig PRIVATE crypt32)
+elseif(APPLE)
+    if(CMAKE_OSX_DEPLOYMENT_TARGET AND CMAKE_OSX_DEPLOYMENT_TARGET VERSION_LESS 10.14)
+        message(FATAL_ERROR "Native trust evaluation requires macOS 10.14 or newer")
+    endif()
+    find_library(SECURITY_FRAMEWORK Security REQUIRED)
+    find_library(COREFOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
+    target_link_libraries(ssig PRIVATE "${SECURITY_FRAMEWORK}" "${COREFOUNDATION_FRAMEWORK}")
+endif()
+
+target_include_directories(ssig SYSTEM PRIVATE ${QPDF_INCLUDE_DIR})
 
 target_include_directories(ssig PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
@@ -64,6 +107,7 @@ target_compile_options(ssig PRIVATE
 set_target_properties(ssig PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION 0
+    MACOSX_RPATH ON
 )
 
 if(BUILD_TESTING)
@@ -74,10 +118,11 @@ install(TARGETS ssig
     EXPORT libssigTargets
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
 
 install(FILES libssig/libssig.h libssig/types.h libssig/version.h
-    libssig/context.h libssig/tokens.h
+    libssig/context.h libssig/tokens.h libssig/trust_store.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libssig
 )
 

@@ -101,7 +101,7 @@ libssig_status libssig_sign(
 		return libssig_xades_v131_sign(ctx, params, signature);
 	}
 	if (params->format == LIBSSIG_FORMAT_PADES) {
-		return libssig_pades_v121_sign(ctx, params, signature);
+		return libssig_pades_v121_sign(ctx, params, NULL, signature);
 	}
 
 	libssig_key_sign_params signing = {
@@ -148,6 +148,26 @@ libssig_status libssig_sign(
 		}
 	}
 	return status;
+}
+
+libssig_status libssig_sign_pdf(
+    const libssig_context*        ctx,
+    const libssig_sign_params*    params,
+    const libssig_pdf_appearance* appearance,
+    libssig_signature*            signature
+) {
+	if (!signature) {
+		return LIBSSIG_ERROR_ARGUMENT;
+	}
+	*signature = (libssig_signature){0};
+	libssig_status status = params_check(ctx, params);
+	if (status != LIBSSIG_OK) {
+		return status;
+	}
+	if (params->format != LIBSSIG_FORMAT_PADES) {
+		return LIBSSIG_ERROR_ARGUMENT;
+	}
+	return libssig_pades_v121_sign(ctx, params, appearance, signature);
 }
 
 libssig_status libssig_document_sign(

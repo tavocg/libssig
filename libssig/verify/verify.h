@@ -164,8 +164,11 @@ typedef struct {
  * Sin ca_data ni SYSTEM_TRUST B-B/B-T permiten comprobar firma/contenido/ESS;
  * LT/LTA requieren confianza para completar sus políticas automáticas.
  * ca_data exige una cadena vigente hasta las raíces proporcionadas.
- * SYSTEM_TRUST suma las raíces del almacén predeterminado de OpenSSL
- * (incluye SSL_CERT_FILE/SSL_CERT_DIR) a ca_data, si está presente.
+ * SYSTEM_TRUST suma los almacenes predeterminados de OpenSSL (incluye
+ * SSL_CERT_FILE/SSL_CERT_DIR) y los nativos de Windows/macOS a ca_data.
+ * Las anclas nativas requieren además validación offline del sistema sobre
+ * la misma cadena, fecha y propósito; no sustituyen errores de OpenSSL.
+ * Las raíces explícitas y las de OpenSSL mantienen su confianza independiente.
  * Intermediarios requieren ca_data o SYSTEM_TRUST.
  * Bundles hasta INT_MAX bytes; vacíos, inválidos o con basura se rechazan.
  * No usa red ni descarga OCSP/CRL; puede validar evidencia OCSP proporcionada.
