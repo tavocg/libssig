@@ -79,7 +79,13 @@ static int detached_check(CMS_ContentInfo* cms) {
 	params.content = (const unsigned char*)"altered";
 	params.content_len = 7;
 	CHECK(libssig_verify(&params, &result) == LIBSSIG_ERROR_VERIFY);
-	CHECK(!result.signature_valid && !result.count && !result.signers);
+	CHECK(
+	    !result.signature_valid &&
+	    result.count ==
+	        (size_t)sk_CMS_SignerInfo_num(CMS_get0_SignerInfos(cms)) &&
+	    result.signers[0].status == LIBSSIG_ERROR_VERIFY
+	);
+	libssig_verify_free(&result);
 	params.content = content;
 	params.content_len = sizeof(content);
 	params.options = LIBSSIG_VERIFY_SYSTEM_TRUST;
@@ -168,7 +174,7 @@ static int container_errors_check(CMS_ContentInfo* cms) {
 	);
 	ASN1_OCTET_STRING* signature = CMS_SignerInfo_get0_signature(signer);
 	unsigned char*     bytes = (unsigned char*)ASN1_STRING_get0_data(signature);
-	/* Alter just one signer; verification must reject the whole result. */
+	/* Reject a bad signature while preserving its explicitly failed report. */
 	bytes[0] ^= 1;
 	data = cms_encode(cms, &params.data_len);
 	CHECK(data);
@@ -178,7 +184,14 @@ static int container_errors_check(CMS_ContentInfo* cms) {
 		params.content_len = 0;
 	}
 	CHECK(libssig_verify(&params, &result) == LIBSSIG_ERROR_VERIFY);
-	CHECK(!result.signature_valid && !result.signers);
+	CHECK(
+	    !result.signature_valid &&
+	    result.count ==
+	        (size_t)sk_CMS_SignerInfo_num(CMS_get0_SignerInfos(cms)) &&
+	    result.signers[0].checked &&
+	    result.signers[0].status == LIBSSIG_ERROR_VERIFY
+	);
+	libssig_verify_free(&result);
 	bytes[0] ^= 1;
 	OPENSSL_free(data);
 	return 0;
@@ -234,7 +247,11 @@ static int missing_certificate_check(EVP_PKEY* key, X509* cert) {
 	params.data = data;
 	libssig_verify_result result = {0};
 	CHECK(libssig_verify(&params, &result) == LIBSSIG_ERROR_VERIFY);
-	CHECK(!result.signers && !result.signature_valid);
+	CHECK(
+	    result.count == 1 && !result.signature_valid &&
+	    result.signers[0].status == LIBSSIG_ERROR_VERIFY
+	);
+	libssig_verify_free(&result);
 	OPENSSL_free(data);
 	CMS_ContentInfo_free(cms);
 	BIO_free(input);

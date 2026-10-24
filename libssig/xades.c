@@ -82,6 +82,27 @@ static bool digest_check(xmlNode* node, const libssig_signature* bytes) {
 	libssig_signature_free(&expected);
 	return ok;
 }
+bool libssig_xades_tree_valid(xmlNode* root) {
+	size_t        count = 0;
+	xmlHashTable* ids = xmlHashCreate(32);
+	bool          valid = ids && tree_valid(root, 0, &count, ids);
+	xmlHashFree(ids, NULL);
+	return valid;
+}
+static bool has_id(xmlNode* node) {
+	xmlChar* id = node ? xmlGetProp(node, BAD_CAST "Id") : NULL;
+	bool     valid = id && *id && xmlValidateNameValue(id);
+	xmlFree(id);
+	return valid;
+}
+static bool targets(xmlNode* reference, const char* key, xmlNode* target) {
+	xmlChar* id = target ? xmlGetProp(target, BAD_CAST "Id") : NULL;
+	xmlChar* uri = reference ? xmlGetProp(reference, BAD_CAST key) : NULL;
+	bool     valid = id && uri && uri[0] == '#' && xmlStrEqual(uri + 1, id);
+	xmlFree(uri);
+	xmlFree(id);
+	return valid;
+}
 static size_t elements(xmlNode* node) {
 	size_t count = 0;
 	for (xmlNode* child = node ? node->children : NULL; child;
@@ -155,10 +176,10 @@ static libssig_status references_read(
 		}
 	}
 	if (count != 2 || !data || !props || elements(doc->signed_info) != 4 ||
-	    !libssig_xml_prop(data, "Id", "Reference-data") ||
-	    !libssig_xml_prop(props, "URI", "#SignedProperties")) {
+	    !has_id(data) || !targets(props, "URI", doc->properties)) {
 		return LIBSSIG_ERROR_UNSUPPORTED;
 	}
+	doc->data_reference = data;
 	doc->detached = libssig_xml_prop(data, "URI", LIBSSIG_CONTENT_URI);
 	if (doc->detached && !params->content && !doc->signature_only) {
 		return LIBSSIG_ERROR_CONTENT_REQUIRED;
@@ -179,9 +200,8 @@ static libssig_status references_read(
 			return LIBSSIG_ERROR_MEMORY;
 		}
 	} else {
-		if (!libssig_xml_prop(data, "URI", "#Content") ||
-		    !libssig_xml_prop(doc->content_object, "Id", "Content") ||
-		    elements(transform) != 1 ||
+		if (!targets(data, "URI", doc->content_object) ||
+		    !has_id(doc->content_object) || elements(transform) != 1 ||
 		    !libssig_xml_prop(
 		        libssig_xml_child(transform, "Transform", LIBSSIG_XMLDSIG),
 		        "Algorithm",
@@ -245,7 +265,7 @@ static bool properties_valid(libssig_xades* doc) {
 	    LIBSSIG_XADES132
 	);
 	return ok && elements(objects) == 1 &&
-	       libssig_xml_prop(format, "ObjectReference", "#Reference-data") &&
+	       targets(format, "ObjectReference", doc->data_reference) &&
 	       libssig_xml_child(format, "MimeType", LIBSSIG_XADES132);
 }
 libssig_status libssig_xades_v131_read(
@@ -271,7 +291,7 @@ libssig_status libssig_xades_v131_read(
 	bool          valid = ids && tree_valid(doc->root, 0, &count, ids);
 	xmlHashFree(ids, NULL);
 	if (!valid || !libssig_xml_is(doc->root, "Signature", LIBSSIG_XMLDSIG) ||
-	    !libssig_xml_prop(doc->root, "Id", "Signature")) {
+	    !has_id(doc->root)) {
 		return LIBSSIG_ERROR_UNSUPPORTED;
 	}
 	doc->signed_info = libssig_xml_child(
@@ -308,7 +328,7 @@ libssig_status libssig_xades_v131_read(
 			}
 		}
 	}
-	if (!qualifying || !libssig_xml_prop(qualifying, "Target", "#Signature") ||
+	if (!qualifying || !targets(qualifying, "Target", doc->root) ||
 	    elements(doc->root) != 3 + object_count) {
 		return LIBSSIG_ERROR_FORMAT;
 	}
@@ -322,16 +342,15 @@ libssig_status libssig_xades_v131_read(
 	    "UnsignedSignatureProperties",
 	    LIBSSIG_XADES132
 	);
-	if (!libssig_xml_prop(doc->properties, "Id", "SignedProperties") ||
-	    !libssig_xml_prop(
-	        libssig_xml_child(
-	            doc->signed_info,
-	            "CanonicalizationMethod",
-	            LIBSSIG_XMLDSIG
-	        ),
-	        "Algorithm",
-	        LIBSSIG_C14N11
-	    )) {
+	if (!has_id(doc->properties) || !libssig_xml_prop(
+	                                    libssig_xml_child(
+	                                        doc->signed_info,
+	                                        "CanonicalizationMethod",
+	                                        LIBSSIG_XMLDSIG
+	                                    ),
+	                                    "Algorithm",
+	                                    LIBSSIG_C14N11
+	                                )) {
 		return LIBSSIG_ERROR_UNSUPPORTED;
 	}
 	xmlNode* method = libssig_xml_child(

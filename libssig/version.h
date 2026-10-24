@@ -7,8 +7,8 @@ extern "C" {
 #endif
 
 #define LIBSSIG_VERSION_MAJOR 0
-#define LIBSSIG_VERSION_MINOR 1
-#define LIBSSIG_VERSION_PATCH 6
+#define LIBSSIG_VERSION_MINOR 2
+#define LIBSSIG_VERSION_PATCH 0
 
 /* Escribe la versión de la biblioteca cargada; cada salida puede ser NULL. */
 void libssig_version(int* out_major, int* out_minor, int* out_patch);

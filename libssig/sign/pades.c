@@ -5,41 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-static bool signed_fields(
-    qpdf_data pdf,
-    qpdf_oh   fields,
-    int       depth,
-    bool      inherited
-) {
-	if (qpdf_oh_is_null(pdf, fields)) {
-		return false;
-	}
-	if (depth > 16 || !qpdf_oh_is_array(pdf, fields) ||
-	    qpdf_oh_get_array_n_items(pdf, fields) > 1024) {
-		return true;
-	}
-	for (int i = 0; i < qpdf_oh_get_array_n_items(pdf, fields); ++i) {
-		qpdf_oh field = qpdf_oh_get_array_item(pdf, fields, i);
-		qpdf_oh type = qpdf_oh_get_key_if_dict(pdf, field, "/FT");
-		bool    signature = qpdf_oh_is_null(pdf, type)
-		                        ? inherited
-		                        : qpdf_oh_is_name_and_equals(pdf, type, "/Sig");
-		if (signature &&
-		    !qpdf_oh_is_null(pdf, qpdf_oh_get_key_if_dict(pdf, field, "/V"))) {
-			return true;
-		}
-		if (signed_fields(
-		        pdf,
-		        qpdf_oh_get_key_if_dict(pdf, field, "/Kids"),
-		        depth + 1,
-		        signature
-		    )) {
-			return true;
-		}
-	}
-	return false;
-}
-
 static libssig_status pdf_signature(
     const libssig_context*        ctx,
     const libssig_sign_params*    params,
@@ -54,21 +19,6 @@ static libssig_status pdf_signature(
         params->data_len,
         &revision
     );
-	if (status == LIBSSIG_OK) {
-		qpdf_oh form = qpdf_oh_get_key(
-		    revision.pdf,
-		    revision.root,
-		    "/AcroForm"
-		);
-		if (signed_fields(
-		        revision.pdf,
-		        qpdf_oh_get_key_if_dict(revision.pdf, form, "/Fields"),
-		        0,
-		        false
-		    )) {
-			status = LIBSSIG_ERROR_UNSUPPORTED;
-		}
-	}
 	if (status == LIBSSIG_OK) {
 		status = libssig_pdf_slot(&revision, false, appearance != NULL);
 	}

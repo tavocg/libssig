@@ -206,11 +206,73 @@ bool libssig_pdf_update(
 static qpdf_oh reference(libssig_pdf_revision* r, int id) {
 	return qpdf_get_object_by_id(r->pdf, id, 0);
 }
+static libssig_status fields_collect(
+    qpdf_data pdf,
+    qpdf_oh   fields,
+    int       depth,
+    size_t*   count,
+    qpdf_oh   out
+) {
+	if (depth > 16 || !qpdf_oh_is_array(pdf, fields)) {
+		return LIBSSIG_ERROR_FORMAT;
+	}
+	for (int i = 0; i < qpdf_oh_get_array_n_items(pdf, fields); ++i) {
+		if (++*count > 1024) {
+			return LIBSSIG_ERROR_UNSUPPORTED;
+		}
+		qpdf_oh field = qpdf_oh_get_array_item(pdf, fields, i);
+		if (!qpdf_oh_is_dictionary(pdf, field)) {
+			return LIBSSIG_ERROR_FORMAT;
+		}
+		qpdf_oh kids = qpdf_oh_get_key(pdf, field, "/Kids");
+		if (!qpdf_oh_is_null(pdf, kids)) {
+			libssig_status
+			    status = fields_collect(pdf, kids, depth + 1, count, out);
+			if (status != LIBSSIG_OK) {
+				return status;
+			}
+		}
+		qpdf_oh value = qpdf_oh_get_key(pdf, field, "/V");
+		if (qpdf_oh_is_name_and_equals(
+		        pdf,
+		        qpdf_oh_get_key(pdf, field, "/FT"),
+		        "/Sig"
+		    ) &&
+		    !qpdf_oh_is_null(pdf, value)) {
+			qpdf_oh_append_item(pdf, out, field);
+		}
+	}
+	return LIBSSIG_OK;
+}
+libssig_status libssig_pdf_fields(qpdf_data pdf, qpdf_oh* out) {
+	*out = qpdf_oh_new_array(pdf);
+	qpdf_oh form = qpdf_oh_get_key(pdf, qpdf_get_root(pdf), "/AcroForm");
+	if (qpdf_oh_is_null(pdf, form)) {
+		return LIBSSIG_OK;
+	}
+	if (!qpdf_oh_is_dictionary(pdf, form)) {
+		return LIBSSIG_ERROR_FORMAT;
+	}
+	qpdf_oh fields = qpdf_oh_get_key(pdf, form, "/Fields");
+	if (qpdf_oh_is_null(pdf, fields)) {
+		return LIBSSIG_OK;
+	}
+	size_t count = 0;
+	return fields_collect(pdf, fields, 0, &count, *out);
+}
 libssig_status libssig_pdf_slot(
     libssig_pdf_revision* r,
     bool                  timestamp,
     bool                  visible
 ) {
+	qpdf_oh        existing = 0;
+	libssig_status checked = libssig_pdf_fields(r->pdf, &existing);
+	if (checked != LIBSSIG_OK) {
+		return checked;
+	}
+	if (qpdf_oh_get_array_n_items(r->pdf, existing) >= 1024) {
+		return LIBSSIG_ERROR_UNSUPPORTED;
+	}
 	int id = object_begin(r);
 	r->signature_id = id;
 	time_t     now = time(NULL);

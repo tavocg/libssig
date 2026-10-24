@@ -215,3 +215,22 @@ está disponible. Procede de `signingTime` (CMS/CAdES), `/M` (PAdES),
 zona explícita no se convierten. Esta fecha es declarada por el firmante;
 no acredita la hora mediante una TSA. Para esto último se conserva
 `timestamp.time`, junto con `timestamp.valid` y `timestamp.trusted`.
+
+## Multiple signatures
+
+`result.signers` includes each independent approval signature; PDF document
+timestamps are evidence, not additional people. Each signer exposes `checked`,
+`status`, `signature_valid`, `trust_checked` and `trusted`, together with its own
+certificate, declared signing time, timestamps, revocation and history results.
+The document's booleans aggregate the individual results; a failure in one
+signature does not erase successful reports for the others. Always check the
+returned status and free the report even on failure. Structural parse failures
+may still return an empty report.
+
+Historical CMS views contain only shared certificate/revocation material covered
+by that signer's archive hash index. PDF historical validation reads the DSS from
+the revision protected by the selected document timestamp. Later unprotected
+material cannot establish earlier proof. Historical PDF checks reject unsigned
+trailing revisions and malformed or unordered signature ranges. Reports describe
+cryptographic integrity of the signed revisions; they do not certify that later
+signers' document edits are acceptable to an application's policy.

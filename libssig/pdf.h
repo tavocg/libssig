@@ -6,6 +6,8 @@
 #include <libssig/tsa.h>
 #include <qpdf/qpdf-c.h>
 
+libssig_status libssig_pdf_fields(qpdf_data pdf, qpdf_oh* out);
+
 typedef struct {
 	qpdf_data pdf;
 	qpdf_oh   root;

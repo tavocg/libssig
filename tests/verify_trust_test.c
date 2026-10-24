@@ -125,6 +125,11 @@ static int verify_check(
 		);
 		CHECK(result.trusted == (expected == LIBSSIG_OK));
 		CHECK((result.signers[0].trust_error == X509_V_OK) == result.trusted);
+	} else if (expected == LIBSSIG_ERROR_VERIFY) {
+		CHECK(
+		    !result.signature_valid && result.count == 1 &&
+		    result.signers[0].status == expected
+		);
 	} else {
 		CHECK(!result.signature_valid && !result.signers && !result.count);
 	}

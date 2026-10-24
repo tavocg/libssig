@@ -650,7 +650,11 @@ static int cades_certificate_hash_corrupt(
 	};
 	libssig_verify_result result = {0};
 	CHECK(libssig_verify(&request, &result) == LIBSSIG_ERROR_VERIFY);
-	CHECK(!result.signature_valid && !result.signers);
+	CHECK(
+	    !result.signature_valid && result.count == 1 &&
+	    result.signers[0].checked &&
+	    result.signers[0].status == LIBSSIG_ERROR_VERIFY
+	);
 	libssig_verify_free(&result);
 	OPENSSL_free(der);
 	return 0;

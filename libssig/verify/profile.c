@@ -112,9 +112,16 @@ void libssig_verify_profiles_finish(
 ) {
 	for (size_t i = 0; i < result->count; ++i) {
 		libssig_verify_signer* s = &result->signers[i];
-		s->level_validated = status == LIBSSIG_OK && s->level_detected &&
-		                     result->trust_checked && result->trusted &&
-		                     !s->trust_error;
+		if (!s->checked) {
+			s->checked = true;
+			s->status = status;
+			s->signature_valid = result->signature_valid;
+			s->trust_checked = result->trust_checked;
+			s->trusted = result->trust_checked && !s->trust_error &&
+			             result->trusted;
+		}
+		s->level_validated = s->status == LIBSSIG_OK && s->level_detected &&
+		                     s->trust_checked && s->trusted && !s->trust_error;
 		if (s->level != LIBSSIG_LEVEL_B_B) {
 			s->level_validated = s->level_validated && s->timestamp.valid &&
 			                     s->timestamp.trusted;

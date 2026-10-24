@@ -594,7 +594,7 @@ static libssig_status timestamp_certs_add(
 	    NID_id_smime_aa_timeStampToken,
 	    -1
 	);
-	X509_ATTRIBUTE* attr = pos >= 0 ? CMS_unsigned_get_attr(s, pos) : NULL;
+	X509_ATTRIBUTE*  attr = pos >= 0 ? CMS_unsigned_get_attr(s, pos) : NULL;
 	const ASN1_TYPE* value = attr ? X509_ATTRIBUTE_get0_type(attr, 0) : NULL;
 	if (!value || value->type != V_ASN1_SEQUENCE) {
 		return LIBSSIG_ERROR_EVIDENCE;
@@ -638,10 +638,18 @@ libssig_status libssig_validation_verify(
 		if (!historical && result->signers[i].level != LIBSSIG_LEVEL_B_LT) {
 			continue;
 		}
-		status = timestamp_certs_add(
-		    sk_CMS_SignerInfo_value(timestamps, i),
-		    ctx.certs
-		);
+		CMS_SignerInfo* signer = sk_CMS_SignerInfo_value(timestamps, i);
+		/* PAdES may provide trusted existence through a document timestamp,
+		 * whose TSA chain is carried in the archive-protected DSS. */
+		if (params->data_len >= 5 && !memcmp(params->data, "%PDF-", 5) &&
+		    CMS_unsigned_get_attr_by_NID(
+		        signer,
+		        NID_id_smime_aa_timeStampToken,
+		        -1
+		    ) < 0) {
+			continue;
+		}
+		status = timestamp_certs_add(signer, ctx.certs);
 	}
 
 	if (sk_ASN1_TYPE_num(revocations) > 1024 || sk_X509_num(ctx.certs) > 1024) {

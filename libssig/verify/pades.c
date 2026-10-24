@@ -215,6 +215,11 @@ static libssig_status fields_verify(
 			cms.content_len = signature.content.len;
 			libssig_verify_result item = {0};
 			current = libssig_verify(&cms, &item);
+			if (item.count > 1) {
+				/* PAdES requires one SignerInfo per signature dictionary. */
+				libssig_verify_free(&item);
+				current = LIBSSIG_ERROR_UNSUPPORTED;
+			}
 			const unsigned char* cursor = signature.cms.data;
 			CMS_ContentInfo*     parsed = item.count ? d2i_CMS_ContentInfo(
                                                        NULL,
@@ -298,37 +303,56 @@ static libssig_status dss_revocations(
 	return LIBSSIG_OK;
 }
 
-/* Initially support the single signature + final document timestamp produced
- * by this library. Reject ambiguous field trees and unsigned later revisions.
- */
+/* Only a timestamp covering validation material is an archive proof.
+ * A preceding document timestamp may instead supply the B-T proof. */
+static bool archive_dss(const libssig_verify_params* params, size_t end) {
+	qpdf_data pdf = qpdf_init();
+	if (!pdf) {
+		return false;
+	}
+	qpdf_silence_errors(pdf);
+	qpdf_set_suppress_warnings(pdf, QPDF_TRUE);
+	qpdf_set_attempt_recovery(pdf, QPDF_FALSE);
+	bool protected = false;
+	if (qpdf_read_memory(
+	        pdf,
+	        "timestamp revision",
+	        (const char*)params->data,
+	        end,
+	        NULL
+	    ) == QPDF_SUCCESS) {
+		qpdf_oh     dss = qpdf_oh_get_key(pdf, qpdf_get_root(pdf), "/DSS");
+		const char* keys[] = {"/OCSPs", "/CRLs"};
+		for (size_t i = 0; i < 2; ++i) {
+			qpdf_oh values = qpdf_oh_get_key_if_dict(pdf, dss, keys[i]);
+			protected |= qpdf_oh_is_array(pdf, values) &&
+			             qpdf_oh_get_array_n_items(pdf, values) > 0;
+		}
+	}
+	qpdf_cleanup(&pdf);
+	return protected;
+}
+/* Validate one approval against the DSS protected by its selected archive. */
 static libssig_status pdf_validation(
     qpdf_data                    pdf,
     const libssig_verify_params* params,
     libssig_verify_result*       result,
-    bool                         historical
+    bool                         historical,
+    qpdf_oh                      fields,
+    int                          document_index,
+    int                          archive_index
 ) {
-	qpdf_oh form = qpdf_oh_get_key(pdf, qpdf_get_root(pdf), "/AcroForm");
-	qpdf_oh fields = qpdf_oh_get_key_if_dict(pdf, form, "/Fields");
-	if (result->count != 1 ||
-	    (historical ? (qpdf_oh_get_array_n_items(pdf, fields) < 2 ||
-	                   qpdf_oh_get_array_n_items(pdf, fields) > 1024)
-	                : qpdf_oh_get_array_n_items(pdf, fields) != 1)) {
-		return LIBSSIG_ERROR_EVIDENCE;
-	}
 	libssig_pdf_signature document = {0}, archive = {0};
-	qpdf_oh               first = qpdf_oh_get_array_item(pdf, fields, 0);
-	qpdf_oh               last = historical ? qpdf_oh_get_array_item(
-                                    pdf,
-                                    fields,
-                                    qpdf_oh_get_array_n_items(pdf, fields) - 1
-                                )
-	                                        : 0;
-	libssig_status        status = libssig_pdf_signature_read(
-        pdf,
-        qpdf_oh_get_key(pdf, first, "/V"),
-        params,
-        &document
-    );
+	qpdf_oh        first = qpdf_oh_get_array_item(pdf, fields, document_index);
+	qpdf_oh        last = historical
+	                          ? qpdf_oh_get_array_item(pdf, fields, archive_index)
+	                          : 0;
+	libssig_status status = libssig_pdf_signature_read(
+	    pdf,
+	    qpdf_oh_get_key(pdf, first, "/V"),
+	    params,
+	    &document
+	);
 	if (status == LIBSSIG_OK && historical) {
 		status = libssig_pdf_signature_read(
 		    pdf,
@@ -339,17 +363,39 @@ static libssig_status pdf_validation(
 	}
 	if (status == LIBSSIG_OK && historical &&
 	    (document.timestamp || !archive.timestamp ||
-	     archive.end != params->data_len ||
 	     document.end > archive.hole_start)) {
 		status = LIBSSIG_ERROR_EVIDENCE;
 	}
+	qpdf_data protected_pdf = NULL;
+	qpdf_data evidence_pdf = pdf;
+	if (status == LIBSSIG_OK && historical) {
+		protected_pdf = qpdf_init();
+		if (!protected_pdf) {
+			status = LIBSSIG_ERROR_MEMORY;
+		} else {
+			qpdf_silence_errors(protected_pdf);
+			qpdf_set_suppress_warnings(protected_pdf, QPDF_TRUE);
+			qpdf_set_attempt_recovery(protected_pdf, QPDF_FALSE);
+			if (qpdf_read_memory(
+			        protected_pdf,
+			        "archive-protected PDF",
+			        (const char*)params->data,
+			        archive.end,
+			        NULL
+			    ) != QPDF_SUCCESS) {
+				status = LIBSSIG_ERROR_EVIDENCE;
+			}
+			evidence_pdf = protected_pdf;
+		}
+	}
 	STACK_OF(ASN1_TYPE)* revocations = sk_ASN1_TYPE_new_null();
 	if (status == LIBSSIG_OK) {
-		status = revocations ? dss_revocations(pdf, "/OCSPs", revocations)
-		                     : LIBSSIG_ERROR_MEMORY;
+		status = revocations
+		             ? dss_revocations(evidence_pdf, "/OCSPs", revocations)
+		             : LIBSSIG_ERROR_MEMORY;
 	}
 	if (status == LIBSSIG_OK) {
-		status = dss_revocations(pdf, "/CRLs", revocations);
+		status = dss_revocations(evidence_pdf, "/CRLs", revocations);
 	}
 	const unsigned char* cursor = document.cms.data;
 	CMS_ContentInfo*     cms = cursor ? d2i_CMS_ContentInfo(
@@ -363,14 +409,19 @@ static libssig_status pdf_validation(
 	    (!cms || !CMS_set1_signers_certs(cms, certs, 0))) {
 		status = LIBSSIG_ERROR_FORMAT;
 	}
-	if (status == LIBSSIG_OK) {
+	if (status == LIBSSIG_OK &&
+	    CMS_unsigned_get_attr_by_NID(
+	        sk_CMS_SignerInfo_value(CMS_get0_SignerInfos(cms), 0),
+	        NID_id_smime_aa_timeStampToken,
+	        -1
+	    ) >= 0) {
 		free(result->signers[0].timestamp.cert_der);
 		result->signers[0].timestamp = (libssig_verify_timestamp){0};
 		status = libssig_verify_timestamps(cms, params, result);
 	}
 	if (status == LIBSSIG_OK) {
 		BIO* pem = BIO_new(BIO_s_mem());
-		status = pem ? dss_certs(pdf, pem) : LIBSSIG_ERROR_MEMORY;
+		status = pem ? dss_certs(evidence_pdf, pem) : LIBSSIG_ERROR_MEMORY;
 		char* data = NULL;
 		long  len = pem ? BIO_get_mem_data(pem, &data) : 0;
 		STACK_OF(X509)* protected_certs = NULL;
@@ -398,8 +449,8 @@ static libssig_status pdf_validation(
 			    .revocations = revocations
 			};
 			size_t previous = document.end;
-			for (int i = 1; status == LIBSSIG_OK &&
-			                i + 1 < qpdf_oh_get_array_n_items(pdf, fields);
+			for (int i = document_index + 1;
+			     status == LIBSSIG_OK && i < archive_index;
 			     ++i) {
 				qpdf_oh field = qpdf_oh_get_array_item(pdf, fields, i);
 				libssig_pdf_signature old = {0};
@@ -410,15 +461,14 @@ static libssig_status pdf_validation(
 				    &old
 				);
 				if (status == LIBSSIG_OK &&
-				    (!old.timestamp || old.end <= previous ||
-				     old.end > archive.hole_start)) {
+				    (old.end <= previous || old.end > archive.hole_start)) {
 					status = LIBSSIG_ERROR_EVIDENCE;
 				}
 				libssig_verify_timestamp stamp = {0};
-				if (status == LIBSSIG_OK) {
+				if (status == LIBSSIG_OK && old.timestamp) {
 					status = document_stamp(&old, params, &stamp);
 				}
-				if (status == LIBSSIG_OK) {
+				if (status == LIBSSIG_OK && old.timestamp) {
 					status = libssig_document_evidence_stamp_check(
 					    &stamp,
 					    &result->signers[0].archive,
@@ -448,6 +498,9 @@ static libssig_status pdf_validation(
 	libssig_signature_free(&document.content);
 	libssig_signature_free(&archive.cms);
 	libssig_signature_free(&archive.content);
+	if (protected_pdf) {
+		qpdf_cleanup(&protected_pdf);
+	}
 	return status;
 }
 
@@ -524,9 +577,11 @@ libssig_status libssig_pades_v121_verify(
 			copy.tsa_intermediates_data_len = (size_t)len;
 		}
 	}
+	qpdf_oh fields = 0;
 	if (status == LIBSSIG_OK) {
-		qpdf_oh form = qpdf_oh_get_key(pdf, qpdf_get_root(pdf), "/AcroForm");
-		qpdf_oh fields = qpdf_oh_get_key_if_dict(pdf, form, "/Fields");
+		status = libssig_pdf_fields(pdf, &fields);
+	}
+	if (status == LIBSSIG_OK) {
 		status = fields_verify(pdf, fields, 0, &copy, result);
 		if (!result->count && status == LIBSSIG_OK) {
 			status = LIBSSIG_ERROR_NOT_FOUND;
@@ -541,30 +596,158 @@ libssig_status libssig_pades_v121_verify(
 	                   (!qpdf_oh_is_null(pdf, crls) &&
 	                    (!qpdf_oh_is_array(pdf, crls) ||
 	                     qpdf_oh_get_array_n_items(pdf, crls) > 0));
-	libssig_verify_profiles_upgrade(revocations, result);
-	bool automatic = !(params->options & LIBSSIG_VERIFY_CURRENT_TIME);
-	bool historical = params->options & LIBSSIG_VERIFY_HISTORICAL;
-	bool lt = false;
-	for (size_t i = 0; i < result->count; ++i) {
-		historical = historical ||
-		             (automatic && result->signers[i].archive.present);
-		lt = lt || (automatic && result->signers[i].level_detected &&
-		            result->signers[i].level == LIBSSIG_LEVEL_B_LT);
-	}
-	if ((historical || lt) &&
-	    (status == LIBSSIG_OK || status == LIBSSIG_ERROR_TRUST)) {
-		if (historical) {
-			copy.options |= LIBSSIG_VERIFY_HISTORICAL;
-			for (size_t i = 0; i < result->count; ++i) {
-				result->signers[i].history = LIBSSIG_HISTORY_INCOMPLETE;
-			}
+	/* Field order is not a time ordering guarantee. Require increasing signed
+	 * revisions before using their evidence, and reject unsigned tails whenever
+	 * historical validation is requested. */
+	int    field_count = qpdf_oh_is_array(pdf, fields)
+	                         ? qpdf_oh_get_array_n_items(pdf, fields)
+	                         : 0;
+	size_t signer_index = 0, previous_end = 0;
+	for (int i = 0; i < field_count && signer_index < result->count; ++i) {
+		qpdf_oh field = qpdf_oh_get_array_item(pdf, fields, i);
+		qpdf_oh value = qpdf_oh_get_key_if_dict(pdf, field, "/V");
+		if (qpdf_oh_is_null(pdf, value)) {
+			continue;
 		}
-		status = historical &&
-		                 (copy.ocsp_count ||
-		                  (copy.options & (LIBSSIG_VERIFY_REQUIRE_OCSP |
-		                                   LIBSSIG_VERIFY_REQUIRE_TSA_OCSP)))
-		             ? LIBSSIG_ERROR_ARGUMENT
-		             : pdf_validation(pdf, &copy, result, historical);
+		libssig_pdf_signature document = {0};
+		libssig_status
+		    current = libssig_pdf_signature_read(pdf, value, params, &document);
+		if (current != LIBSSIG_OK) {
+			status = current;
+			break;
+		}
+		bool ordered = document.end > previous_end;
+		previous_end = document.end;
+		if (document.timestamp) {
+			libssig_signature_free(&document.cms);
+			libssig_signature_free(&document.content);
+			continue;
+		}
+		libssig_verify_signer* signer = &result->signers[signer_index++];
+		libssig_verify_result  item = {
+		     .signers = signer,
+		     .count = 1,
+		     .signature_valid = signer->signature_valid,
+		     .trust_checked = signer->trust_checked,
+		     .trusted = signer->trusted
+        };
+		free(signer->archive.cert_der);
+		signer->archive = (libssig_verify_timestamp){0};
+		int    archive_index = -1;
+		size_t end = document.end;
+		for (int j = i + 1; j < field_count; ++j) {
+			qpdf_oh next_field = qpdf_oh_get_array_item(pdf, fields, j);
+			qpdf_oh next_value = qpdf_oh_get_key_if_dict(pdf, next_field, "/V");
+			if (qpdf_oh_is_null(pdf, next_value)) {
+				continue;
+			}
+			libssig_pdf_signature next = {0};
+			libssig_status        read = libssig_pdf_signature_read(
+                pdf,
+                next_value,
+                params,
+                &next
+            );
+			if (read != LIBSSIG_OK || next.end <= end ||
+			    end > next.hole_start) {
+				ordered = false;
+			}
+			end = next.end;
+			if (read == LIBSSIG_OK && next.timestamp &&
+			    document.end <= next.hole_start) {
+				libssig_verify_timestamp stamp = {.present = true};
+				libssig_verify_params    anchor = copy;
+				anchor.options &= ~LIBSSIG_VERIFY_HISTORICAL;
+				read = document_stamp(&next, &anchor, &stamp);
+				if (!signer->timestamp.present) {
+					signer->timestamp = stamp;
+					signer->timestamp.cert_der = NULL;
+					if (stamp.cert_der_len) {
+						signer->timestamp.cert_der = malloc(stamp.cert_der_len);
+						if (!signer->timestamp.cert_der) {
+							read = LIBSSIG_ERROR_MEMORY;
+						} else {
+							memcpy(
+							    signer->timestamp.cert_der,
+							    stamp.cert_der,
+							    stamp.cert_der_len
+							);
+						}
+					}
+				}
+				if (archive_dss(params, next.end)) {
+					free(signer->archive.cert_der);
+					signer->archive = stamp;
+					stamp.cert_der = NULL;
+					archive_index = j;
+				}
+				free(stamp.cert_der);
+			}
+			if (read != LIBSSIG_OK) {
+				current = read;
+			}
+			libssig_signature_free(&next.cms);
+			libssig_signature_free(&next.content);
+		}
+		libssig_verify_profiles_upgrade(revocations, &item);
+		bool automatic = !(params->options & LIBSSIG_VERIFY_CURRENT_TIME);
+		bool historical = (params->options & LIBSSIG_VERIFY_HISTORICAL) ||
+		                  (automatic && signer->archive.present);
+		bool lt = automatic && signer->level_detected &&
+		          signer->level == LIBSSIG_LEVEL_B_LT;
+		if ((historical || lt) && signer->signature_valid &&
+		    (current == LIBSSIG_OK || current == LIBSSIG_ERROR_TRUST)) {
+			copy.options = params->options;
+			if (historical) {
+				signer->history = LIBSSIG_HISTORY_INCOMPLETE;
+				copy.options |= LIBSSIG_VERIFY_HISTORICAL;
+			}
+			current = historical && (!ordered || archive_index < 0 ||
+			                         end != params->data_len)
+			              ? LIBSSIG_ERROR_EVIDENCE
+			          : historical && (copy.ocsp_count ||
+			                           (copy.options &
+			                            (LIBSSIG_VERIFY_REQUIRE_OCSP |
+			                             LIBSSIG_VERIFY_REQUIRE_TSA_OCSP)))
+			              ? LIBSSIG_ERROR_ARGUMENT
+			              : pdf_validation(
+			                    pdf,
+			                    &copy,
+			                    &item,
+			                    historical,
+			                    fields,
+			                    i,
+			                    archive_index
+			                );
+			signer->checked = false;
+			libssig_verify_profiles_finish(current, &item);
+		} else if (current == LIBSSIG_OK) {
+			current = signer->status;
+		} else {
+			signer->checked = false;
+			libssig_verify_profiles_finish(current, &item);
+		}
+		if (current != LIBSSIG_OK) {
+			status = current;
+		}
+		libssig_signature_free(&document.cms);
+		libssig_signature_free(&document.content);
+	}
+	if (signer_index != result->count && status == LIBSSIG_OK) {
+		status = LIBSSIG_ERROR_UNSUPPORTED;
+	}
+	if (result->count) {
+		result->signature_valid = result->trust_checked = result
+		                                                      ->trusted = true;
+		for (size_t i = 0; i < result->count; ++i) {
+			result->signature_valid &= result->signers[i].signature_valid;
+			result->trust_checked &= result->signers[i].trust_checked;
+			result->trusted &= result->signers[i].trusted;
+		}
+		/* Successful historical checks supersede current-time chain errors. */
+		if (status == LIBSSIG_ERROR_TRUST && result->trusted) {
+			status = LIBSSIG_OK;
+		}
 	}
 	if (qpdf_has_error(pdf)) {
 		status = LIBSSIG_ERROR_FORMAT;

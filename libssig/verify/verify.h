@@ -152,6 +152,11 @@ typedef struct {
 	 * disponible. No es una fecha acreditada por una TSA: para ello usar
 	 * timestamp.time y comprobar timestamp.valid/trusted. */
 	char signing_time[21];
+	/* Resultado individual: no se deduce de los demás firmantes. checked
+	 * distingue un resultado completado de una estructura inicializada a cero.
+	 */
+	bool           checked, signature_valid, trust_checked, trusted;
+	libssig_status status;
 } libssig_verify_signer;
 
 typedef struct {

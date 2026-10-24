@@ -555,11 +555,11 @@ static libssig_status timestamp_collect(
 	    NID_id_smime_aa_timeStampToken,
 	    -1
 	);
-	X509_ATTRIBUTE* attr = index >= 0 ? CMS_unsigned_get_attr(signer, index)
-	                                  : NULL;
+	X509_ATTRIBUTE*  attr = index >= 0 ? CMS_unsigned_get_attr(signer, index)
+	                                   : NULL;
 	const ASN1_TYPE* value = attr && X509_ATTRIBUTE_count(attr) == 1
-	                            ? X509_ATTRIBUTE_get0_type(attr, 0)
-	                            : NULL;
+	                             ? X509_ATTRIBUTE_get0_type(attr, 0)
+	                             : NULL;
 	if (!value || value->type != V_ASN1_SEQUENCE) {
 		return LIBSSIG_ERROR_TIMESTAMP;
 	}
@@ -599,8 +599,21 @@ libssig_status libssig_validation_collect(
     const libssig_sign_services* services,
     libssig_validation_data*     data
 ) {
-	data->certs = CMS_get1_certs(cms);
-	data->revocations = sk_ASN1_TYPE_new_null();
+	STACK_OF(X509)* embedded = CMS_get1_certs(cms);
+	if (!data->certs) {
+		data->certs = sk_X509_new_null();
+	}
+	if (!data->revocations) {
+		data->revocations = sk_ASN1_TYPE_new_null();
+	}
+	bool added = data->certs != NULL;
+	for (int i = 0; added && i < sk_X509_num(embedded); ++i) {
+		added = cert_add(data->certs, sk_X509_value(embedded, i));
+	}
+	sk_X509_pop_free(embedded, X509_free);
+	if (!added) {
+		return LIBSSIG_ERROR_MEMORY;
+	}
 	if (!data->certs || !data->revocations) {
 		return LIBSSIG_ERROR_MEMORY;
 	}
@@ -633,7 +646,11 @@ libssig_status libssig_validation_collect(
 		CMS_SignerInfo_get0_algs(signer, NULL, &cert, NULL, NULL);
 		status = cert ? chain_collect(cert, false, services, data)
 		              : LIBSSIG_ERROR_VERIFY;
-		if (status == LIBSSIG_OK) {
+		if (status == LIBSSIG_OK && CMS_unsigned_get_attr_by_NID(
+		                                signer,
+		                                NID_id_smime_aa_timeStampToken,
+		                                -1
+		                            ) >= 0) {
 			status = timestamp_collect(signer, services, data);
 		}
 		ASN1_OBJECT* archive_oid = OBJ_txt2obj(LIBSSIG_ARCHIVE_OID, 1);

@@ -36,6 +36,9 @@ typedef struct {
 	unsigned int                        options;
 	const char*
 	    mime_type; /* CAdES: NULL detecta el tipo del contenido con libmagic. */
+	/* Original content when co-signing an existing detached signature. */
+	const unsigned char* content;
+	size_t               content_len;
 } libssig_sign_params;
 
 /* Requiere contexto abierto, token con URI y certificado con ID binario y DER.
@@ -57,6 +60,8 @@ typedef struct {
  * Liberar el resultado anterior antes de reutilizar la salida.
  * En error, la salida válida queda vacía; ck_rv conserva el código PKCS#11
  * cuando existe. Para errores locales puede ser cero: comprobar status. */
+/* Recognize a supported signature container without checking its trust. */
+bool libssig_signed_format(const unsigned char*, size_t, libssig_format*);
 libssig_status libssig_sign(
     const libssig_context*     ctx,
     const libssig_sign_params* params,

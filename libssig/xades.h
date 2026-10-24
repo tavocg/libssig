@@ -11,9 +11,10 @@
 #define LIBSSIG_PROPERTIES_TYPE "http://uri.etsi.org/01903#SignedProperties"
 #define LIBSSIG_CONTENT_URI "urn:libssig:content"
 typedef struct {
+	char signature_id[64], properties_id[80], reference_id[80], content_id[80];
 	xmlDoc*  xml;
 	xmlNode *root, *signed_info, *signature_value, *key_info, *properties,
-	    *unsigned_properties, *content_object;
+	    *unsigned_properties, *content_object, *data_reference;
 	X509*                   cert;
 	libssig_algo            algo;
 	libssig_hash            hash;
@@ -22,6 +23,13 @@ typedef struct {
 	libssig_signature       content, signature;
 	libssig_validation_data evidence;
 } libssig_xades;
+bool           libssig_xades_tree_valid(xmlNode* root);
+libssig_status libssig_xades_v131_sign_named(
+    const libssig_context*,
+    const libssig_sign_params*,
+    const char*,
+    libssig_signature*
+);
 void     libssig_xades_v131_free(libssig_xades* doc);
 xmlNode* libssig_xml_child(xmlNode* parent, const char* name, const char* ns);
 bool     libssig_xml_is(xmlNode* node, const char* name, const char* ns);

@@ -2,7 +2,12 @@
 #include "internal.h"
 #include <libssig/ades.h>
 #include <libssig/document.h>
+#include <libssig/multisign.h>
+#include <libssig/xades.h>
 #include <limits.h>
+#include <openssl/rand.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static bool mime_type_valid(const char* type) {
@@ -35,7 +40,9 @@ static libssig_status params_check(
 	    params->cert->id_len > ULONG_MAX || !params->cert->der ||
 	    !params->cert->der_len || params->cert->der_len > LONG_MAX ||
 	    (params->data_len && !params->data) || params->data_len > INT_MAX ||
-	    (params->pin_len && !params->pin) || params->pin_len > ULONG_MAX) {
+	    (params->pin_len && !params->pin) || params->pin_len > ULONG_MAX ||
+	    (params->content_len && !params->content) ||
+	    params->content_len > INT_MAX) {
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
 
@@ -79,7 +86,7 @@ static libssig_status params_check(
 	return LIBSSIG_OK;
 }
 
-libssig_status libssig_sign(
+static libssig_status sign_new(
     const libssig_context*     ctx,
     const libssig_sign_params* params,
     libssig_signature*         signature
@@ -147,6 +154,122 @@ libssig_status libssig_sign(
 			*signature = output;
 		}
 	}
+	return status;
+}
+
+bool libssig_signed_format(
+    const unsigned char* data,
+    size_t               length,
+    libssig_format*      format
+) {
+	libssig_multisign doc = {0};
+	libssig_status    status = libssig_multisign_read(data, length, &doc);
+	if (status == LIBSSIG_OK && format) {
+		*format = doc.format;
+	}
+	libssig_multisign_free(&doc);
+	return status == LIBSSIG_OK;
+}
+libssig_status libssig_sign(
+    const libssig_context*     ctx,
+    const libssig_sign_params* params,
+    libssig_signature*         output
+) {
+	if (!output) {
+		return LIBSSIG_ERROR_ARGUMENT;
+	}
+	*output = (libssig_signature){0};
+	libssig_status status = params_check(ctx, params);
+	if (status != LIBSSIG_OK) {
+		return status;
+	}
+	libssig_multisign doc = {0};
+	status = libssig_multisign_read(params->data, params->data_len, &doc);
+	bool cms = (params->format == LIBSSIG_FORMAT_CADES ||
+	            params->format == LIBSSIG_FORMAT_CMS) &&
+	           (doc.format == LIBSSIG_FORMAT_CADES ||
+	            doc.format == LIBSSIG_FORMAT_CMS);
+	if (status == LIBSSIG_ERROR_NOT_FOUND ||
+	    (status == LIBSSIG_OK && !cms && doc.format != params->format)) {
+		libssig_multisign_free(&doc);
+		return sign_new(ctx, params, output);
+	}
+	libssig_signature content = {0}, added = {0};
+	bool              detached = false;
+	if (status == LIBSSIG_OK) {
+		status = libssig_multisign_content(
+		    &doc,
+		    params->content,
+		    params->content_len,
+		    &content,
+		    &detached
+		);
+	}
+	/* Never append a signature over a different detached payload, or bless a
+	 * container whose existing cryptographic signatures are already broken. */
+	for (size_t i = 0; status == LIBSSIG_OK && i < doc.count; ++i) {
+		libssig_verify_params verify = {
+		    .data = doc.parts[i].data,
+		    .data_len = doc.parts[i].len,
+		    .content = params->content,
+		    .content_len = params->content_len,
+		    .options = LIBSSIG_VERIFY_CURRENT_TIME
+		};
+		libssig_verify_result result = {0};
+		libssig_status        checked = libssig_verify(&verify, &result);
+		if (!result.signature_valid ||
+		    (checked != LIBSSIG_OK && checked != LIBSSIG_ERROR_TRUST)) {
+			status = checked == LIBSSIG_OK ? LIBSSIG_ERROR_VERIFY : checked;
+		}
+		libssig_verify_free(&result);
+	}
+	libssig_sign_params next = *params;
+	next.data = content.data;
+	next.data_len = content.len;
+	next.content = NULL;
+	next.content_len = 0;
+	next.options = detached ? LIBSSIG_SIGN_DETACHED : 0;
+	if (status == LIBSSIG_OK && doc.format == LIBSSIG_FORMAT_XADES) {
+		unsigned char random[16];
+		char          id[48] = "Signature-";
+		if (RAND_bytes(random, sizeof(random)) != 1) {
+			status = LIBSSIG_ERROR_CRYPTO;
+		}
+		for (size_t i = 0; status == LIBSSIG_OK && i < sizeof(random); ++i) {
+			snprintf(id + 10 + i * 2, 3, "%02x", random[i]);
+		}
+		if (status == LIBSSIG_OK) {
+			status = libssig_xades_v131_sign_named(ctx, &next, id, &added);
+		}
+	} else if (status == LIBSSIG_OK) {
+		status = sign_new(ctx, &next, &added);
+	}
+	if (status == LIBSSIG_OK && doc.count >= 1024) {
+		status = LIBSSIG_ERROR_UNSUPPORTED;
+	}
+	if (status == LIBSSIG_OK) {
+		libssig_signature* parts = realloc(
+		    doc.parts,
+		    (doc.count + 1) * sizeof(*parts)
+		);
+		if (!parts) {
+			status = LIBSSIG_ERROR_MEMORY;
+		} else {
+			doc.parts = parts;
+			doc.parts[doc.count++] = added;
+			added = (libssig_signature){0};
+		}
+	}
+	if (status == LIBSSIG_OK) {
+		status = libssig_multisign_merge(&doc, output);
+	}
+	if (status != LIBSSIG_OK) {
+		libssig_signature_free(output);
+		output->ck_rv = added.ck_rv;
+	}
+	libssig_signature_free(&added);
+	libssig_signature_free(&content);
+	libssig_multisign_free(&doc);
 	return status;
 }
 

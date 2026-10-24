@@ -87,3 +87,41 @@ The signature includes the original content by default. Set
 `params.options = LIBSSIG_SIGN_DETACHED` for a separate signature; retain the
 exact original file for verification. Unknown option bits are rejected.
 See [verification](verification.md) to check either form.
+
+## Parallel signatures (0.2.0)
+
+Passing an already signed container to `libssig_sign()` with a compatible
+`format` adds a signature over its original payload. It preserves existing
+signatures, including repeated signatures by the same certificate. CMS and
+CAdES use parallel `SignerInfo` entries; JAdES uses JWS General JSON
+Serialization; XAdES uses an unnamespaced `Signatures` collection of independent
+enveloping signatures with globally unique IDs. It does not insert a second
+signature into an existing enveloped reference that would invalidate it.
+
+PAdES appends an incremental revision with a new signature field, and optionally
+a new appearance. Each PDF signature dictionary contains exactly one
+`SignerInfo`. Previously signed bytes and existing appearances remain intact.
+Encrypted, certified (`/Perms`) and XFA PDFs remain unsupported; restrictions
+are errors rather than permission overrides. Field trees are bounded to depth
+16 and 1024 nodes. Non-PDF signature views are bounded to 1024 signers and
+64 MiB of materialized views.
+
+Use `libssig_signed_format()` to recognize a container before choosing its
+format; recognition does not establish validity. For a detached container,
+supply its original bytes through `sign_params.content/content_len`; an empty
+original requires a non-NULL pointer with length zero. Missing originals return
+`LIBSSIG_ERROR_CONTENT_REQUIRED`; mismatched originals or broken signatures
+fail. Existing attachment mode is retained. Selecting another format explicitly
+signs the container bytes as a new payload instead of converting its signatures.
+
+`libssig_extend()` renews each independent signature's evidence. For PDF, later
+signatures protect earlier CMS holes, so renewal appends document timestamps and
+DSS revisions rather than rewriting protected bytes. A document timestamp can
+provide the B-T existence proof; LT adds validation material and LTA protects it
+with a subsequent timestamp. Renewal preserves an existing higher level. It
+cannot make an invalid signature valid or bypass a PDF certification policy.
+
+These structures follow [RFC 5652 §5](https://www.rfc-editor.org/rfc/rfc5652#section-5),
+[RFC 7515 §7.2](https://www.rfc-editor.org/rfc/rfc7515#section-7.2),
+[XMLDSig 1.1](https://www.w3.org/TR/xmldsig-core/) and
+[ETSI EN 319 142-1](https://www.etsi.org/deliver/etsi_en/319100_319199/31914201/01.02.01_60/en_31914201v010201p.pdf).

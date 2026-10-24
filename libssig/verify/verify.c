@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "internal.h"
 #include <libssig/document.h>
+#include <libssig/multisign.h>
 #include <limits.h>
 #include <openssl/cms.h>
 #include <openssl/cmserr.h>
@@ -107,6 +108,54 @@ libssig_status libssig_verify(
 		return LIBSSIG_ERROR_ARGUMENT;
 	}
 
+	libssig_multisign document = {0};
+	libssig_status    parsed = libssig_multisign_read(
+        params->data,
+        params->data_len,
+        &document
+    );
+	if (parsed == LIBSSIG_OK && document.collection) {
+		libssig_status status = LIBSSIG_OK;
+		for (size_t i = 0; i < document.count; ++i) {
+			if (document.format == LIBSSIG_FORMAT_CADES ||
+			    document.format == LIBSSIG_FORMAT_CMS) {
+				libssig_multisign_protected_view(&document.parts[i]);
+			}
+			libssig_verify_params single = *params;
+			single.data = document.parts[i].data;
+			single.data_len = document.parts[i].len;
+			libssig_verify_result item = {0};
+			libssig_status        current = libssig_verify(&single, &item);
+			if (current == LIBSSIG_ERROR_MEMORY) {
+				libssig_verify_free(&item);
+				status = current;
+				break;
+			}
+			if (!item.count) {
+				libssig_multisign_failure(&single, current, &item);
+			}
+			libssig_status appended = libssig_verify_append(result, &item);
+			libssig_verify_free(&item);
+			if (appended != LIBSSIG_OK) {
+				status = appended;
+				break;
+			}
+			if (current != LIBSSIG_OK &&
+			    (status == LIBSSIG_OK || current == LIBSSIG_ERROR_VERIFY)) {
+				status = current;
+			}
+		}
+		result->format = document.format;
+		libssig_multisign_free(&document);
+		if (status == LIBSSIG_ERROR_MEMORY) {
+			libssig_verify_free(result);
+		}
+		return status;
+	}
+	libssig_multisign_free(&document);
+	if (parsed != LIBSSIG_OK && parsed != LIBSSIG_ERROR_NOT_FOUND) {
+		return parsed;
+	}
 	libssig_format format = libssig_document_format(
 	    params->data,
 	    params->data_len
@@ -115,7 +164,11 @@ libssig_status libssig_verify(
 		libssig_status status = format == LIBSSIG_FORMAT_JADES
 		                            ? libssig_jades_v121_verify(params, result)
 		                            : libssig_xades_v131_verify(params, result);
-		if (status != LIBSSIG_OK && status != LIBSSIG_ERROR_TRUST &&
+		if (status == LIBSSIG_ERROR_VERIFY && !result->count) {
+			libssig_multisign_failure(params, status, result);
+		}
+		if (status != LIBSSIG_OK && status != LIBSSIG_ERROR_VERIFY &&
+		    status != LIBSSIG_ERROR_TRUST &&
 		    status != LIBSSIG_ERROR_TIMESTAMP && status != LIBSSIG_ERROR_OCSP &&
 		    status != LIBSSIG_ERROR_REVOKED &&
 		    status != LIBSSIG_ERROR_EVIDENCE) {
@@ -126,7 +179,11 @@ libssig_status libssig_verify(
 	if (params->data_len >= 5 && !memcmp(params->data, "%PDF-", 5)) {
 		libssig_status status = libssig_pades_v121_verify(params, result);
 		libssig_verify_profiles_finish(status, result);
-		if (status != LIBSSIG_OK && status != LIBSSIG_ERROR_TRUST &&
+		if (status == LIBSSIG_ERROR_VERIFY && !result->count) {
+			libssig_multisign_failure(params, status, result);
+		}
+		if (status != LIBSSIG_OK && status != LIBSSIG_ERROR_VERIFY &&
+		    status != LIBSSIG_ERROR_TRUST &&
 		    status != LIBSSIG_ERROR_TIMESTAMP && status != LIBSSIG_ERROR_OCSP &&
 		    status != LIBSSIG_ERROR_REVOKED &&
 		    status != LIBSSIG_ERROR_EVIDENCE) {
@@ -135,5 +192,9 @@ libssig_status libssig_verify(
 		return status;
 	}
 
-	return libssig_cades_v131_verify(params, result);
+	libssig_status status = libssig_cades_v131_verify(params, result);
+	if (status == LIBSSIG_ERROR_VERIFY && !result->count) {
+		libssig_multisign_failure(params, status, result);
+	}
+	return status;
 }

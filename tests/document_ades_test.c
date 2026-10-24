@@ -15,9 +15,10 @@ libssig_status document_fixture_sign(
 );
 
 static X509* document_cert_create(EVP_PKEY* key) {
-	X509* cert = X509_new();
-	bool  ok = cert && X509_set_version(cert, 2) &&
-	          ASN1_INTEGER_set(X509_get_serialNumber(cert), 42) &&
+	static long serial = 42;
+	X509*       cert = X509_new();
+	bool        ok = cert && X509_set_version(cert, 2) &&
+	          ASN1_INTEGER_set(X509_get_serialNumber(cert), serial++) &&
 	          X509_gmtime_adj(X509_getm_notBefore(cert), -3600) &&
 	          X509_gmtime_adj(X509_getm_notAfter(cert), 86400) &&
 	          X509_set_pubkey(cert, key) &&
@@ -351,6 +352,221 @@ static int parser_mutations_check(
 	return 0;
 }
 
+static int cosigning_check(
+    const libssig_sign_services* services,
+    const libssig_verify_params* trust
+) {
+	EVP_PKEY* first = EVP_PKEY_Q_keygen(NULL, NULL, "RSA", 2048);
+	EVP_PKEY* other = EVP_PKEY_Q_keygen(NULL, NULL, "RSA", 2048);
+	X509*     a = first ? document_cert_create(first) : NULL;
+	X509*     b = other ? document_cert_create(other) : NULL;
+	CHECK(a && b);
+	X509_NAME* name = X509_NAME_new();
+	CHECK(
+	    name && X509_NAME_add_entry_by_txt(
+	                name,
+	                "CN",
+	                MBSTRING_ASC,
+	                (const unsigned char*)"Other document signer",
+	                -1,
+	                -1,
+	                0
+	            )
+	);
+	CHECK(
+	    X509_set_subject_name(b, name) && X509_sign(b, root_key, EVP_sha256())
+	);
+	X509_NAME_free(name);
+	const unsigned char content[] = "parallel signatures preserve this payload";
+	const unsigned char pdf
+	    [] = "%PDF-1.7\n1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n2 "
+	         "0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n3 0 "
+	         "obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+	         "/Resources << >> >>\nendobj\nxref\n0 4\n0000000000 65535 f "
+	         "\n0000000009 00000 n \n0000000058 00000 n \n0000000115 00000 n "
+	         "\ntrailer\n<< /Size 4 /Root 1 0 R >>\nstartxref\n203\n%%EOF\n";
+	libssig_format formats[] = {
+	    LIBSSIG_FORMAT_CADES,
+	    LIBSSIG_FORMAT_CMS,
+	    LIBSSIG_FORMAT_PADES,
+	    LIBSSIG_FORMAT_XADES,
+	    LIBSSIG_FORMAT_JADES
+	};
+	for (size_t f = 0; f < sizeof(formats) / sizeof(formats[0]); ++f) {
+		const libssig_level levels[] = {
+		    LIBSSIG_LEVEL_B_B,
+		    LIBSSIG_LEVEL_B_T,
+		    LIBSSIG_LEVEL_B_LT,
+		    LIBSSIG_LEVEL_B_LTA
+		};
+		for (size_t l = 0; l < (formats[f] == LIBSSIG_FORMAT_CMS ? 1 : 4);
+		     ++l) {
+			libssig_level level = levels[l];
+			for (int detached = 0;
+			     detached <= (formats[f] != LIBSSIG_FORMAT_PADES);
+			     ++detached) {
+				libssig_sign_params params = {
+				    .data = formats[f] == LIBSSIG_FORMAT_PADES ? pdf : content,
+				    .data_len = formats[f] == LIBSSIG_FORMAT_PADES
+				                    ? sizeof(pdf) - 1
+				                    : sizeof(content) - 1,
+				    .format = formats[f],
+				    .level = level,
+				    .services = services,
+				    .options = detached ? LIBSSIG_SIGN_DETACHED : 0
+				};
+				libssig_signature signed_data = {0};
+				for (int signer = 0; signer < 3; ++signer) {
+					libssig_signature next = {0};
+					params.content = signer && detached ? content : NULL;
+					params.content_len = signer && detached
+					                         ? sizeof(content) - 1
+					                         : 0;
+					libssig_status status = document_fixture_sign(
+					    signer == 2 ? other : first,
+					    signer == 2 ? b : a,
+					    params,
+					    &next
+					);
+					if (status != LIBSSIG_OK) {
+						fprintf(
+						    stderr,
+						    "cosign format=%d detached=%d signer=%d "
+						    "status=%d\n",
+						    formats[f],
+						    detached,
+						    signer,
+						    status
+						);
+					}
+					CHECK(status == LIBSSIG_OK);
+					if (signer && formats[f] == LIBSSIG_FORMAT_PADES) {
+						CHECK(
+						    next.len > signed_data.len && !memcmp(
+						                                      next.data,
+						                                      signed_data.data,
+						                                      signed_data.len
+						                                  )
+						);
+					}
+					libssig_signature_free(&signed_data);
+					signed_data = next;
+					libssig_verify_params verify = *trust;
+					verify.data = signed_data.data;
+					verify.data_len = signed_data.len;
+					verify.content = detached ? content : NULL;
+					verify.content_len = detached ? sizeof(content) - 1 : 0;
+					libssig_verify_result result = {0};
+					status = libssig_verify(&verify, &result);
+					if (status != LIBSSIG_OK) {
+						fprintf(
+						    stderr,
+						    "verify cosign format=%d detached=%d signer=%d "
+						    "status=%d count=%zu\n",
+						    formats[f],
+						    detached,
+						    signer,
+						    status,
+						    result.count
+						);
+					}
+					CHECK(
+					    status == LIBSSIG_OK &&
+					    result.count == (size_t)signer + 1 &&
+					    result.signature_valid && result.trusted
+					);
+					for (size_t i = 0; i < result.count; ++i) {
+						CHECK(
+						    result.signers[i].checked &&
+						    result.signers[i].signature_valid &&
+						    result.signers[i].trusted &&
+						    result.signers[i].status == LIBSSIG_OK
+						);
+					}
+					libssig_verify_free(&result);
+					params.data = signed_data.data;
+					params.data_len = signed_data.len;
+				}
+				if (formats[f] != LIBSSIG_FORMAT_CMS) {
+					const libssig_level targets[] = {
+					    LIBSSIG_LEVEL_B_LTA,
+					    LIBSSIG_LEVEL_B_T,
+					    LIBSSIG_LEVEL_B_LT
+					};
+					for (size_t target = 0;
+					     target < (formats[f] == LIBSSIG_FORMAT_PADES &&
+					                       level == LIBSSIG_LEVEL_B_B
+					                   ? 3
+					                   : 1);
+					     ++target) {
+						libssig_extend_params extend = {
+						    .data = signed_data.data,
+						    .data_len = signed_data.len,
+						    .content = detached ? content : NULL,
+						    .content_len = detached ? sizeof(content) - 1 : 0,
+						    .level = targets[target],
+						    .services = services
+						};
+						libssig_signature renewed = {0};
+						libssig_status    status = libssig_extend(
+                            &extend,
+                            &renewed
+                        );
+						if (status != LIBSSIG_OK) {
+							fprintf(
+							    stderr,
+							    "renew format=%d level=%d detached=%d "
+							    "status=%d\n",
+							    formats[f],
+							    level,
+							    detached,
+							    status
+							);
+						}
+						CHECK(status == LIBSSIG_OK);
+						libssig_verify_params verify = *trust;
+						verify.data = renewed.data;
+						verify.data_len = renewed.len;
+						verify.content = extend.content;
+						verify.content_len = extend.content_len;
+						libssig_verify_result result = {0};
+						status = libssig_verify(&verify, &result);
+						if (status != LIBSSIG_OK) {
+							fprintf(
+							    stderr,
+							    "renew verify format=%d level=%d detached=%d "
+							    "status=%d\n",
+							    formats[f],
+							    level,
+							    detached,
+							    status
+							);
+						}
+						CHECK(
+						    status == LIBSSIG_OK && result.count == 3 &&
+						    result.trusted
+						);
+						for (size_t i = 0; i < result.count; ++i) {
+							CHECK(
+							    result.signers[i].level_validated &&
+							    result.signers[i].level == targets[target]
+							);
+						}
+						libssig_verify_free(&result);
+						libssig_signature_free(&renewed);
+					}
+				}
+
+				libssig_signature_free(&signed_data);
+			}
+		}
+	}
+	X509_free(a);
+	X509_free(b);
+	EVP_PKEY_free(first);
+	EVP_PKEY_free(other);
+	return 0;
+}
 int main(int argc, char** argv) {
 	CHECK(unsetenv("NIX_SSL_CERT_FILE") == 0);
 	CHECK(
@@ -390,6 +606,7 @@ int main(int argc, char** argv) {
 	};
 	libssig_sign_services services =
 	    {.exchange = exchange, .tsa_url = "http://test/tsa", .trust = &trust};
+	CHECK(cosigning_check(&services, &trust) == 0);
 	const unsigned char content[] = {0, 1, 0xff, '<', '&', '"', 0};
 	libssig_level       levels[] = {
         LIBSSIG_LEVEL_B_B,

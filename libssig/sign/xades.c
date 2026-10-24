@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include "mime.h"
 #include <libssig/xades.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -11,7 +12,8 @@ static xmlNode* reference_add(
     const char*              transform,
     const libssig_signature* bytes,
     libssig_hash             hash,
-    bool                     properties
+    bool                     properties,
+    const char*              reference_id
 ) {
 	xmlNode* ref = libssig_xml_add(info, LIBSSIG_XMLDSIG, "Reference", NULL);
 	bool     ok = ref && xmlNewProp(ref, BAD_CAST "URI", BAD_CAST uri);
@@ -19,7 +21,7 @@ static xmlNode* reference_add(
 		ok = ok &&
 		     xmlNewProp(ref, BAD_CAST "Type", BAD_CAST LIBSSIG_PROPERTIES_TYPE);
 	} else {
-		ok = ok && xmlNewProp(ref, BAD_CAST "Id", BAD_CAST "Reference-data");
+		ok = ok && xmlNewProp(ref, BAD_CAST "Id", BAD_CAST reference_id);
 	}
 	if (transform) {
 		xmlNode* transforms = libssig_xml_add(
@@ -52,7 +54,9 @@ static bool properties_add(
 	    "QualifyingProperties",
 	    NULL
 	);
-	bool ok = q && xmlNewProp(q, BAD_CAST "Target", BAD_CAST "#Signature");
+	char target[128];
+	snprintf(target, sizeof(target), "#%s", doc->signature_id);
+	bool ok = q && xmlNewProp(q, BAD_CAST "Target", BAD_CAST target);
 	doc->properties = libssig_xml_add(
 	    q,
 	    LIBSSIG_XADES132,
@@ -63,7 +67,7 @@ static bool properties_add(
 	     xmlNewProp(
 	         doc->properties,
 	         BAD_CAST "Id",
-	         BAD_CAST "SignedProperties"
+	         BAD_CAST doc->properties_id
 	     );
 	xmlNode* properties = libssig_xml_add(
 	    doc->properties,
@@ -102,12 +106,9 @@ static bool properties_add(
 	    "DataObjectFormat",
 	    NULL
 	);
+	snprintf(target, sizeof(target), "#%s", doc->reference_id);
 	ok = ok && format &&
-	     xmlNewProp(
-	         format,
-	         BAD_CAST "ObjectReference",
-	         BAD_CAST "#Reference-data"
-	     ) &&
+	     xmlNewProp(format, BAD_CAST "ObjectReference", BAD_CAST target) &&
 	     libssig_xml_add(format, LIBSSIG_XADES132, "MimeType", mime);
 	if (!doc->detached) {
 		ok = ok && libssig_xml_add(
@@ -143,7 +144,7 @@ static bool tree_create(
 	              BAD_CAST LIBSSIG_XADES141,
 	              BAD_CAST "xades141"
 	          ) &&
-	          xmlNewProp(doc->root, BAD_CAST "Id", BAD_CAST "Signature");
+	          xmlNewProp(doc->root, BAD_CAST "Id", BAD_CAST doc->signature_id);
 	doc->signed_info = libssig_xml_add(
 	    doc->root,
 	    LIBSSIG_XMLDSIG,
@@ -208,7 +209,7 @@ static bool tree_create(
 		     xmlNewProp(
 		         doc->content_object,
 		         BAD_CAST "Id",
-		         BAD_CAST "Content"
+		         BAD_CAST doc->content_id
 		     ) &&
 		     xmlNewProp(
 		         doc->content_object,
@@ -230,30 +231,36 @@ static bool tree_create(
 	    .data = (unsigned char*)params->data,
 	    .len = params->data_len
 	};
+	char content_uri[128], properties_uri[128];
+	snprintf(content_uri, sizeof(content_uri), "#%s", doc->content_id);
+	snprintf(properties_uri, sizeof(properties_uri), "#%s", doc->properties_id);
 	ok = ok && reference_add(
 	               doc->signed_info,
-	               doc->detached ? LIBSSIG_CONTENT_URI : "#Content",
+	               doc->detached ? LIBSSIG_CONTENT_URI : content_uri,
 	               doc->detached ? NULL : LIBSSIG_BASE64_TRANSFORM,
 	               &content,
 	               params->hash,
-	               false
+	               false,
+	               doc->reference_id
 	           );
 	libssig_signature props = {0};
 	ok = ok && libssig_xml_c14n(doc->properties, &props) &&
 	     reference_add(
 	         doc->signed_info,
-	         "#SignedProperties",
+	         properties_uri,
 	         LIBSSIG_C14N11,
 	         &props,
 	         params->hash,
-	         true
+	         true,
+	         doc->reference_id
 	     );
 	libssig_signature_free(&props);
 	return ok;
 }
-libssig_status libssig_xades_v131_sign(
+libssig_status libssig_xades_v131_sign_named(
     const libssig_context*     ctx,
     const libssig_sign_params* params,
+    const char*                identifier,
     libssig_signature*         output
 ) {
 	char*          detected = NULL;
@@ -264,6 +271,36 @@ libssig_status libssig_xades_v131_sign(
 	                                                &detected
 	                                            );
 	libssig_xades  doc = {0};
+	snprintf(
+	    doc.signature_id,
+	    sizeof(doc.signature_id),
+	    "%s",
+	    identifier ? identifier : "Signature"
+	);
+	if (identifier) {
+		snprintf(
+		    doc.properties_id,
+		    sizeof(doc.properties_id),
+		    "%s-properties",
+		    identifier
+		);
+		snprintf(
+		    doc.reference_id,
+		    sizeof(doc.reference_id),
+		    "%s-reference",
+		    identifier
+		);
+		snprintf(
+		    doc.content_id,
+		    sizeof(doc.content_id),
+		    "%s-content",
+		    identifier
+		);
+	} else {
+		strcpy(doc.properties_id, "SignedProperties");
+		strcpy(doc.reference_id, "Reference-data");
+		strcpy(doc.content_id, "Content");
+	}
 	if (status == LIBSSIG_OK &&
 	    !tree_create(
 	        &doc,
@@ -317,4 +354,12 @@ libssig_status libssig_xades_v131_sign(
 	libssig_signature_free(&baseline);
 	libssig_xades_v131_free(&doc);
 	return status;
+}
+
+libssig_status libssig_xades_v131_sign(
+    const libssig_context*     ctx,
+    const libssig_sign_params* params,
+    libssig_signature*         output
+) {
+	return libssig_xades_v131_sign_named(ctx, params, NULL, output);
 }
