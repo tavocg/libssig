@@ -152,6 +152,43 @@ cmake -S . -B build -DBUILD_TESTING=OFF
 cmake --build build
 ```
 
+Shared libraries are the default for standalone builds. To build a static
+libssig archive instead, use a separate build directory:
+
+```sh
+cmake -S . -B build-static -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTING=OFF
+cmake --build build-static
+cmake --install build-static --prefix /path/to/prefix
+```
+
+This embeds libssig in the consumer; it does not force its dependencies to be
+static. PKCS#11 vendor modules remain dynamically loaded.
+
+Installed and build-tree packages expose the same target:
+
+```cmake
+find_package(libssig 0.1.5 CONFIG REQUIRED)
+target_link_libraries(my_app PRIVATE libssig::ssig)
+```
+
+Set `CMAKE_PREFIX_PATH` to the install prefix, or `libssig_DIR` to the libssig
+build directory. Static packages discover their link dependencies automatically;
+keep the corresponding development packages available to the consumer.
+
+Embedding the source is also supported:
+
+```cmake
+set(BUILD_SHARED_LIBS OFF) # Select before adding libssig.
+add_subdirectory(vendor/libssig)
+target_link_libraries(my_app PRIVATE libssig::ssig)
+```
+
+Embedded builds inherit the parent's `BUILD_SHARED_LIBS` setting (unset means
+static), leave its CTest configuration alone, and default libssig tests and
+installation to OFF. Enable them explicitly with `LIBSSIG_BUILD_TESTING=ON`
+(also requires the parent's `BUILD_TESTING=ON`) or `LIBSSIG_INSTALL=ON`.
+Standalone builds retain the usual `BUILD_TESTING` behavior.
+
 Run tests (Python dependencies are included in `nix develop`; otherwise see
 [tests/README.md](tests/README.md)):
 
