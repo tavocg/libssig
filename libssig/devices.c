@@ -602,8 +602,10 @@ libssig_status libssig_devices_changed(
 				size_t capacity = present_capacity ? present_capacity * 2 : 8;
 				if (capacity < present_capacity ||
 				    capacity > SIZE_MAX / sizeof(*present)) {
-					ok = false;
-					break;
+					free(present);
+					free(ids);
+					EVP_MD_CTX_free(hash);
+					return LIBSSIG_ERROR_MEMORY;
 				}
 				slot_reference* grown = realloc(
 				    present,
@@ -652,55 +654,74 @@ libssig_status libssig_devices_changed(
 			free(present);
 			return LIBSSIG_ERROR_MEMORY;
 		}
-		token_ok = EVP_DigestInit_ex(token_hash, EVP_sha256(), NULL) == 1;
-		for (size_t n = 0; token_ok && n < present_count; ++n) {
+		bool token_hash_ok = EVP_DigestInit_ex(
+		                         token_hash,
+		                         EVP_sha256(),
+		                         NULL
+		                     ) == 1;
+		bool token_read_ok = true;
+		for (size_t n = 0; token_hash_ok && n < present_count; ++n) {
 			CK_TOKEN_INFO token = {0};
 			CK_RV rv = ctx->impl->modules[present[n].module]->C_GetTokenInfo(
 			    present[n].id,
 			    &token
 			);
 			if (rv != CKR_OK) {
-				token_ok = false;
+				token_read_ok = false;
 				break;
 			}
 			/* Exclude session counters, free memory, clocks and volatile PIN
 			 * flags: using the token must not look like replacement. */
-			token_ok = EVP_DigestUpdate(
-			               token_hash,
-			               &present[n].module,
-			               sizeof(present[n].module)
-			           ) == 1 &&
-			           EVP_DigestUpdate(
-			               token_hash,
-			               &present[n].id,
-			               sizeof(present[n].id)
-			           ) == 1 &&
-			           EVP_DigestUpdate(
-			               token_hash,
-			               token.label,
-			               sizeof(token.label)
-			           ) == 1 &&
-			           EVP_DigestUpdate(
-			               token_hash,
-			               token.manufacturerID,
-			               sizeof(token.manufacturerID)
-			           ) == 1 &&
-			           EVP_DigestUpdate(
-			               token_hash,
-			               token.model,
-			               sizeof(token.model)
-			           ) == 1 &&
-			           EVP_DigestUpdate(
-			               token_hash,
-			               token.serialNumber,
-			               sizeof(token.serialNumber)
-			           ) == 1;
+			token_hash_ok = EVP_DigestUpdate(
+			                    token_hash,
+			                    &present[n].module,
+			                    sizeof(present[n].module)
+			                ) == 1 &&
+			                EVP_DigestUpdate(
+			                    token_hash,
+			                    &present[n].id,
+			                    sizeof(present[n].id)
+			                ) == 1 &&
+			                EVP_DigestUpdate(
+			                    token_hash,
+			                    token.label,
+			                    sizeof(token.label)
+			                ) == 1 &&
+			                EVP_DigestUpdate(
+			                    token_hash,
+			                    token.manufacturerID,
+			                    sizeof(token.manufacturerID)
+			                ) == 1 &&
+			                EVP_DigestUpdate(
+			                    token_hash,
+			                    token.model,
+			                    sizeof(token.model)
+			                ) == 1 &&
+			                EVP_DigestUpdate(
+			                    token_hash,
+			                    token.serialNumber,
+			                    sizeof(token.serialNumber)
+			                ) == 1;
 		}
-		length = 0;
-		token_ok = token_ok &&
-		           EVP_DigestFinal_ex(token_hash, token_fingerprint, &length) ==
-		               1 &&
-		           length == sizeof(token_fingerprint);
+		if (!token_hash_ok) {
+			EVP_MD_CTX_free(token_hash);
+			free(present);
+			return LIBSSIG_ERROR_CRYPTO;
+		}
+		if (token_read_ok) {
+			length = 0;
+			token_ok = EVP_DigestFinal_ex(
+			               token_hash,
+			               token_fingerprint,
+			               &length
+			           ) == 1 &&
+			           length == sizeof(token_fingerprint);
+			if (!token_ok) {
+				EVP_MD_CTX_free(token_hash);
+				free(present);
+				return LIBSSIG_ERROR_CRYPTO;
+			}
+		}
 		EVP_MD_CTX_free(token_hash);
 	}
 	free(present);
