@@ -9,6 +9,9 @@ jobs:
   build:
     name: Build and Test
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        shared: ["ON", "OFF"]
 
     steps:
       - name: Checkout repository
@@ -20,7 +23,7 @@ jobs:
         uses: cachix/install-nix-action@v31
 
       - name: Configure
-        run: nix develop --command cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DLIBSSIG_TEST_CONFORMANCE=ON
+        run: nix develop --command cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DLIBSSIG_TEST_CONFORMANCE=ON -DBUILD_SHARED_LIBS=${{ matrix.shared }}
 
       - name: Build
         run: nix develop --command cmake --build build --parallel

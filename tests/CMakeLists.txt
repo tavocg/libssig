@@ -321,3 +321,17 @@ if(PDFTOPPM_EXECUTABLE AND Python3_Interpreter_FOUND)
         "${CMAKE_CURRENT_BINARY_DIR}/appearance-fixtures")
     set_tests_properties(pdf_appearance_render PROPERTIES FIXTURES_REQUIRED libssig_appearance)
 endif()
+
+# Exercise the exported package without inheriting this directory's dependency
+# targets, and verify add_subdirectory defaults in an independent parent.
+if(LIBSSIG_TOP_LEVEL AND LIBSSIG_INSTALL)
+    add_test(NAME cmake_consumer
+        COMMAND "${CMAKE_COMMAND}"
+            "-DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/.."
+            "-DBUILD_DIR=${CMAKE_CURRENT_BINARY_DIR}/.."
+            "-DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/cmake-consumer"
+            "-DSHARED=${BUILD_SHARED_LIBS}"
+            "-DCONFIG=$<CONFIG>"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake_consumer.cmake")
+    set_tests_properties(cmake_consumer PROPERTIES TIMEOUT 180)
+endif()

@@ -16,7 +16,15 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
-include(CTest)
+set(LIBSSIG_TOP_LEVEL OFF)
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    set(LIBSSIG_TOP_LEVEL ON)
+    option(BUILD_SHARED_LIBS "Build shared libraries" ON)
+    include(CTest)
+endif()
+option(LIBSSIG_BUILD_TESTING "Build libssig tests" ${LIBSSIG_TOP_LEVEL})
+option(LIBSSIG_INSTALL "Install libssig and its CMake package" ${LIBSSIG_TOP_LEVEL})
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 find_package(PkgConfig REQUIRED)
 find_package(ZLIB REQUIRED)
@@ -33,18 +41,14 @@ pkg_check_modules(P11_KIT REQUIRED IMPORTED_TARGET p11-kit-1)
 pkg_check_modules(MAGIC REQUIRED IMPORTED_TARGET libmagic)
 pkg_check_modules(JANSSON REQUIRED IMPORTED_TARGET jansson)
 pkg_check_modules(XML2 REQUIRED IMPORTED_TARGET libxml-2.0)
-find_path(QPDF_INCLUDE_DIR qpdf/qpdf-c.h)
-find_library(QPDF_LIBRARY qpdf)
-if(NOT QPDF_INCLUDE_DIR OR NOT QPDF_LIBRARY)
-    message(FATAL_ERROR "QPDF >= 11 development files are required for PAdES")
-endif()
+find_package(LibssigQPDF REQUIRED)
 
 file(GLOB_RECURSE LIBSSIG_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/libssig/*.c"
 )
 list(FILTER LIBSSIG_SOURCES EXCLUDE REGEX "_test\\.c$")
 
-add_library(ssig SHARED ${LIBSSIG_SOURCES})
+add_library(ssig ${LIBSSIG_SOURCES})
 add_library(libssig::ssig ALIAS ssig)
 include(cmake/OpenSSLCompat.cmake)
 libssig_openssl_compat(ssig)
@@ -56,7 +60,7 @@ target_link_libraries(ssig PRIVATE
     PkgConfig::JANSSON
     PkgConfig::XML2
     OpenSSL::Crypto
-    ${QPDF_LIBRARY}
+    LibssigQPDF::LibssigQPDF
 )
 
 option(LIBSSIG_EMBED_MAGIC_DATABASE "Embed a matching libmagic database for portable packages" OFF)
@@ -90,8 +94,6 @@ elseif(APPLE)
     target_link_libraries(ssig PRIVATE "${SECURITY_FRAMEWORK}" "${COREFOUNDATION_FRAMEWORK}")
 endif()
 
-target_include_directories(ssig SYSTEM PRIVATE ${QPDF_INCLUDE_DIR})
-
 target_include_directories(ssig PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
     "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
@@ -110,39 +112,50 @@ set_target_properties(ssig PROPERTIES
     MACOSX_RPATH ON
 )
 
-if(BUILD_TESTING)
+if(BUILD_TESTING AND LIBSSIG_BUILD_TESTING)
     add_subdirectory(tests)
 endif()
 
-install(TARGETS ssig
-    EXPORT libssigTargets
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
-
-install(FILES libssig/libssig.h libssig/types.h libssig/version.h
-    libssig/context.h libssig/devices.h libssig/tokens.h libssig/trust_store.h
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libssig
-)
-
-foreach(feature certificates sign extend verify timestamp ocsp)
-    install(FILES libssig/${feature}/${feature}.h
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libssig/${feature}
+if(LIBSSIG_INSTALL)
+    install(TARGETS ssig
+        EXPORT libssigTargets
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     )
-endforeach()
 
-install(EXPORT libssigTargets
-    FILE libssigTargets.cmake
-    NAMESPACE libssig::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libssig
-)
+    install(FILES libssig/libssig.h libssig/types.h libssig/version.h
+        libssig/context.h libssig/devices.h libssig/tokens.h libssig/trust_store.h
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libssig
+    )
+
+    foreach(feature certificates sign extend verify timestamp ocsp)
+        install(FILES libssig/${feature}/${feature}.h
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libssig/${feature}
+        )
+    endforeach()
+
+    install(EXPORT libssigTargets
+        FILE libssigTargets.cmake
+        NAMESPACE libssig::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libssig
+    )
+
+endif()
 
 # Allow sibling projects to consume the local build without installing it.
-export(EXPORT libssigTargets
+export(TARGETS ssig
     FILE "${CMAKE_CURRENT_BINARY_DIR}/libssigTargets.cmake"
     NAMESPACE libssig::
 )
+
+get_target_property(LIBSSIG_LIBRARY_TYPE ssig TYPE)
+set(LIBSSIG_STATIC OFF)
+if(LIBSSIG_LIBRARY_TYPE STREQUAL "STATIC_LIBRARY")
+    set(LIBSSIG_STATIC ON)
+endif()
+# The build-tree package also needs the QPDF finder.
+configure_file(cmake/FindLibssigQPDF.cmake FindLibssigQPDF.cmake COPYONLY)
 
 configure_package_config_file(
     cmake/libssigConfig.cmake.in
@@ -156,8 +169,11 @@ write_basic_package_version_file(
     COMPATIBILITY SameMajorVersion
 )
 
-install(FILES
-    "${CMAKE_CURRENT_BINARY_DIR}/libssigConfig.cmake"
-    "${CMAKE_CURRENT_BINARY_DIR}/libssigConfigVersion.cmake"
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libssig
-)
+if(LIBSSIG_INSTALL)
+    install(FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/libssigConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/libssigConfigVersion.cmake"
+        cmake/FindLibssigQPDF.cmake
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/libssig
+    )
+endif()

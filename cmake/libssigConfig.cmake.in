@@ -7,6 +7,33 @@
 
 @PACKAGE_INIT@
 
+if(@LIBSSIG_STATIC@)
+    include(CMakeFindDependencyMacro)
+    find_dependency(ZLIB)
+    if(WIN32 OR APPLE)
+        find_dependency(OpenSSL 3.5 COMPONENTS Crypto)
+    else()
+        find_dependency(OpenSSL 3.0 COMPONENTS Crypto)
+    endif()
+    find_dependency(PkgConfig)
+    pkg_check_modules(P11_KIT REQUIRED IMPORTED_TARGET p11-kit-1)
+    pkg_check_modules(MAGIC REQUIRED IMPORTED_TARGET libmagic)
+    pkg_check_modules(JANSSON REQUIRED IMPORTED_TARGET jansson)
+    pkg_check_modules(XML2 REQUIRED IMPORTED_TARGET libxml-2.0)
+    # Keep the consumer's module search path unchanged, including on failure.
+    function(_libssig_find_qpdf)
+        list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}")
+        find_package(LibssigQPDF QUIET)
+        set(LibssigQPDF_FOUND "${LibssigQPDF_FOUND}" PARENT_SCOPE)
+    endfunction()
+    _libssig_find_qpdf()
+    if(NOT LibssigQPDF_FOUND)
+        set(libssig_FOUND FALSE)
+        set(libssig_NOT_FOUND_MESSAGE "libssig requires QPDF development files")
+        return()
+    endif()
+endif()
+
 include("${CMAKE_CURRENT_LIST_DIR}/libssigTargets.cmake")
 
 check_required_components(libssig)
