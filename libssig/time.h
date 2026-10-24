@@ -7,6 +7,7 @@
 #include <time.h>
 
 bool libssig_time_read(const ASN1_TIME* value, time_t* out_time);
+bool libssig_time_format(time_t value, char output[21]);
 bool libssig_verify_time_parse(const char value[21], time_t* out_time);
 
 #endif

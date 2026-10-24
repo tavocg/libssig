@@ -3,6 +3,7 @@
 #include "ades_test.c"
 #undef LIBSSIG_ADES_FIXTURE_MAIN
 #include <libssig/jades.h>
+#include <libssig/time.h>
 #include <libssig/xades.h>
 #include <libxml/parser.h>
 
@@ -80,6 +81,11 @@ static int verify_check(
 	    result.signers[0].level == level && result.signers[0].level_detected &&
 	    result.signers[0].level_validated
 	);
+	time_t signed_at;
+	CHECK(
+	    libssig_verify_time_parse(result.signers[0].signing_time, &signed_at)
+	);
+	CHECK(signed_at > time(NULL) - 86400 && signed_at <= time(NULL) + 5);
 	CHECK(result.signers[0].anchor.source == LIBSSIG_TRUST_FALLBACK);
 	CHECK(result.signers[0].timestamp.present == (level != LIBSSIG_LEVEL_B_B));
 	if (level != LIBSSIG_LEVEL_B_B) {

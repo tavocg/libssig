@@ -7,6 +7,43 @@
 #include <stdlib.h>
 #include <string.h>
 
+/* PDF /M is signer-declared metadata. Read complete dates with an explicit
+ * zone; leave floating or incomplete dates unavailable instead of inventing
+ * a timezone. Apostrophes around PDF timezone minutes are optional. */
+static void signing_time(qpdf_data pdf, qpdf_oh signature, char output[21]) {
+	qpdf_oh field = qpdf_oh_get_key(pdf, signature, "/M");
+	if (!qpdf_oh_is_string(pdf, field)) {
+		return;
+	}
+	size_t      length = 0;
+	const char* value = qpdf_oh_get_binary_string_value(pdf, field, &length);
+	if (!value || length > 32 || memchr(value, 0, length)) {
+		return;
+	}
+	if (length >= 2 && value[0] == 'D' && value[1] == ':') {
+		value += 2;
+		length -= 2;
+	}
+	char   encoded[33];
+	size_t n = 0;
+	for (size_t i = 0; i < length; ++i) {
+		if (value[i] != '\'') {
+			encoded[n++] = value[i];
+		}
+	}
+	encoded[n] = 0;
+	if (!((n == 15 && encoded[14] == 'Z') ||
+	      (n == 19 && (encoded[14] == '+' || encoded[14] == '-')))) {
+		return;
+	}
+	ASN1_TIME* parsed = ASN1_TIME_new();
+	time_t     at;
+	if (parsed && ASN1_TIME_set_string(parsed, encoded) &&
+	    libssig_time_read(parsed, &at)) {
+		libssig_time_format(at, output);
+	}
+	ASN1_TIME_free(parsed);
+}
 static libssig_status dss_certs(qpdf_data pdf, BIO* pem) {
 	qpdf_oh dss = qpdf_oh_get_key(pdf, qpdf_get_root(pdf), "/DSS");
 	if (qpdf_oh_is_null(pdf, dss)) {
@@ -187,6 +224,11 @@ static libssig_status fields_verify(
 			                                         : NULL;
 			if (parsed) {
 				libssig_verify_profiles_detect(parsed, true, false, &item);
+				for (size_t j = 0; j < item.count; ++j) {
+					if (!item.signers[j].signing_time[0]) {
+						signing_time(pdf, value, item.signers[j].signing_time);
+					}
+				}
 			}
 			CMS_ContentInfo_free(parsed);
 			if (item.count) {

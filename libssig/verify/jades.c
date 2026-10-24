@@ -235,6 +235,12 @@ libssig_status libssig_jades_v121_verify(
 		libssig_verify_signer* signer = &result->signers[0];
 		signer->level = LIBSSIG_LEVEL_B_B;
 		signer->level_detected = true;
+		json_int_t issued = json_integer_value(
+		    json_object_get(doc.protected, "iat")
+		);
+		if (issued >= 0 && (json_int_t)(time_t)issued == issued) {
+			libssig_time_format((time_t)issued, signer->signing_time);
+		}
 		unsigned char* der = NULL;
 		int            len = i2d_X509(doc.cert, &der);
 		if (len <= 0 || !libssig_bytes_append(&input, NULL, 0)) {

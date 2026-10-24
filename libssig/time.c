@@ -36,3 +36,15 @@ bool libssig_verify_time_parse(const char value[21], time_t* out_time) {
 	ASN1_TIME_free(parsed);
 	return ok;
 }
+
+bool libssig_time_format(time_t value, char output[21]) {
+	ASN1_TIME* encoded = ASN1_TIME_set(NULL, value);
+	struct tm  utc;
+	bool       ok = encoded && ASN1_TIME_to_tm(encoded, &utc) &&
+	          strftime(output, 21, "%Y-%m-%dT%H:%M:%SZ", &utc) == 20;
+	ASN1_TIME_free(encoded);
+	if (!ok) {
+		output[0] = 0;
+	}
+	return ok;
+}

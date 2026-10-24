@@ -15,12 +15,15 @@ static const ASN1_TYPE* signed_attribute(CMS_SignerInfo* s, int nid) {
 static bool baseline_present(CMS_SignerInfo* s, bool pades) {
 	const ASN1_TYPE* type = signed_attribute(s, NID_pkcs9_contentType);
 	const ASN1_TYPE* digest = signed_attribute(s, NID_pkcs9_messageDigest);
-	const ASN1_TYPE* cert = signed_attribute(s, NID_id_smime_aa_signingCertificateV2);
+	const ASN1_TYPE* cert = signed_attribute(
+	    s,
+	    NID_id_smime_aa_signingCertificateV2
+	);
 	if (!cert) {
 		cert = signed_attribute(s, NID_id_smime_aa_signingCertificate);
 	}
 	const ASN1_TYPE* generated = signed_attribute(s, NID_pkcs9_signingTime);
-	bool       time_valid = generated &&
+	bool             time_valid = generated &&
 	                  (generated->type == V_ASN1_UTCTIME ||
 	                   generated->type == V_ASN1_GENERALIZEDTIME) &&
 	                  ASN1_TIME_check((ASN1_TIME*)generated->value.asn1_string);
@@ -60,6 +63,14 @@ void libssig_verify_profiles_detect(
 	for (size_t i = 0; i < result->count; ++i) {
 		CMS_SignerInfo*        s = sk_CMS_SignerInfo_value(signers, (int)i);
 		libssig_verify_signer* signer = &result->signers[i];
+		const ASN1_TYPE* generated = signed_attribute(s, NID_pkcs9_signingTime);
+		time_t           at;
+		if (generated &&
+		    (generated->type == V_ASN1_UTCTIME ||
+		     generated->type == V_ASN1_GENERALIZEDTIME) &&
+		    libssig_time_read((ASN1_TIME*)generated->value.asn1_string, &at)) {
+			libssig_time_format(at, signer->signing_time);
+		}
 		signer->level_detected = baseline_present(s, pades);
 		signer->level = LIBSSIG_LEVEL_B_B;
 		if (signer->level_detected && !pades) {

@@ -206,3 +206,12 @@ verification and parsing take place in memory.
 The commands return zero only when all requested checks pass. They do not write
 or extract documents. Extensions are illustrative; container contents determine
 whether an original file is required.
+
+## Fecha declarada de firma
+
+Cada firmante expone `signing_time` en UTC ISO 8601, o una cadena vacía si no
+está disponible. Procede de `signingTime` (CMS/CAdES), `/M` (PAdES),
+`SigningTime` (XAdES) o `iat` protegido (JAdES). Las fechas PDF incompletas o sin
+zona explícita no se convierten. Esta fecha es declarada por el firmante;
+no acredita la hora mediante una TSA. Para esto último se conserva
+`timestamp.time`, junto con `timestamp.valid` y `timestamp.trusted`.

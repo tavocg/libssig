@@ -218,6 +218,22 @@ libssig_status libssig_xades_v131_verify(
 		libssig_verify_signer* signer = &result->signers[0];
 		signer->level = LIBSSIG_LEVEL_B_B;
 		signer->level_detected = true;
+		xmlNode* properties = libssig_xml_child(
+		    doc.properties,
+		    "SignedSignatureProperties",
+		    LIBSSIG_XADES132
+		);
+		xmlNode* time = libssig_xml_child(
+		    properties,
+		    "SigningTime",
+		    LIBSSIG_XADES132
+		);
+		xmlChar* text = time ? xmlNodeGetContent(time) : NULL;
+		time_t   at;
+		if (text && libssig_verify_time_parse((const char*)text, &at)) {
+			libssig_time_format(at, signer->signing_time);
+		}
+		xmlFree(text);
 		unsigned char* der = NULL;
 		int            len = i2d_X509(doc.cert, &der);
 		signer->cert_der = len > 0 ? malloc((size_t)len) : NULL;

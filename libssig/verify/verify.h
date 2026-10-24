@@ -148,6 +148,10 @@ typedef struct {
 	/* Instante acreditado por el sello de firma, UTC ISO 8601. */
 	char validation_time[21];
 	bool revocation_checked;
+	/* Fecha declarada por el firmante, UTC ISO 8601; vacía si no está
+	 * disponible. No es una fecha acreditada por una TSA: para ello usar
+	 * timestamp.time y comprobar timestamp.valid/trusted. */
+	char signing_time[21];
 } libssig_verify_signer;
 
 typedef struct {
