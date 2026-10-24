@@ -14,8 +14,8 @@
  * multiplication checks without comparing a promoted 32-bit value directly
  * with a constant derived from 64-bit SIZE_MAX. */
 static bool allocation_fits(CK_ULONG count, size_t item_size) {
-    size_t size = (size_t)count;
-    return (CK_ULONG)size == count && size <= SIZE_MAX/item_size;
+	size_t size = (size_t)count;
+	return (CK_ULONG)size == count && size <= SIZE_MAX / item_size;
 }
 static char* text_copy(const unsigned char* text, size_t length) {
 	while (length && text[length - 1] == ' ') {
@@ -486,6 +486,51 @@ libssig_status libssig_devices(
 	return LIBSSIG_OK;
 }
 
+static libssig_status list_slots(
+    CK_FUNCTION_LIST* module,
+    CK_SLOT_ID**      ids,
+    CK_ULONG*         count,
+    CK_RV*            rv
+) {
+	*ids = NULL;
+	*count = 0;
+	for (unsigned n = 0; n < 3; ++n) {
+		CK_ULONG needed = 0;
+		*rv = module->C_GetSlotList(CK_FALSE, NULL, &needed);
+		if (*rv != CKR_OK) {
+			return LIBSSIG_ERROR_PKCS11;
+		}
+		if (!allocation_fits(needed, sizeof(**ids))) {
+			return LIBSSIG_ERROR_MEMORY;
+		}
+		CK_ULONG    capacity = needed;
+		CK_SLOT_ID* list = calloc(needed ? (size_t)needed : 1, sizeof(*list));
+		if (!list) {
+			return LIBSSIG_ERROR_MEMORY;
+		}
+		*rv = module->C_GetSlotList(CK_FALSE, list, &needed);
+		if (*rv == CKR_BUFFER_TOO_SMALL) {
+			free(list);
+			continue;
+		}
+		if (*rv == CKR_OK && needed <= capacity) {
+			*ids = list;
+			*count = needed;
+			return LIBSSIG_OK;
+		}
+		free(list);
+		if (*rv == CKR_OK) {
+			*rv = CKR_GENERAL_ERROR;
+		}
+		return LIBSSIG_ERROR_PKCS11;
+	}
+	*rv = CKR_BUFFER_TOO_SMALL;
+	return LIBSSIG_ERROR_PKCS11;
+}
+typedef struct {
+	size_t     module;
+	CK_SLOT_ID id;
+} slot_reference;
 libssig_status libssig_devices_changed(
     const libssig_context* ctx,
     libssig_device_state*  state,
@@ -501,9 +546,15 @@ libssig_status libssig_devices_changed(
 	if (!hash) {
 		return LIBSSIG_ERROR_MEMORY;
 	}
-	bool ok = EVP_DigestInit_ex(hash, EVP_sha256(), NULL) == 1;
-	bool event = false;
-	for (size_t m = 0; ok && ctx->impl->modules && ctx->impl->modules[m]; ++m) {
+	bool            ok = EVP_DigestInit_ex(hash, EVP_sha256(), NULL) == 1;
+	bool            event = false;
+	bool            slots_ok = true;
+	slot_reference* present = NULL;
+	size_t          present_count = 0;
+	size_t          present_capacity = 0;
+	for (size_t m = 0;
+	     ok && slots_ok && ctx->impl->modules && ctx->impl->modules[m];
+	     ++m) {
 		CK_FUNCTION_LIST* module = ctx->impl->modules[m];
 		CK_SLOT_ID        slot_event;
 		if (module->C_WaitForSlotEvent &&
@@ -511,95 +562,168 @@ libssig_status libssig_devices_changed(
 		        CKR_OK) {
 			event = true;
 		}
-		CK_ULONG count = 0;
-		CK_RV    rv = module->C_GetSlotList(CK_FALSE, NULL, &count);
+		CK_SLOT_ID*    ids = NULL;
+		CK_ULONG       count = 0;
+		CK_RV          rv = CKR_OK;
+		libssig_status status = list_slots(module, &ids, &count, &rv);
+		if (status == LIBSSIG_ERROR_MEMORY) {
+			free(present);
+			EVP_MD_CTX_free(hash);
+			return status;
+		}
+		if (status != LIBSSIG_OK) {
+			slots_ok = false;
+			break;
+		}
 		ok = EVP_DigestUpdate(hash, &m, sizeof(m)) == 1 &&
-		     EVP_DigestUpdate(hash, &rv, sizeof(rv)) == 1;
-		if (rv != CKR_OK) {
-			continue;
-		}
-		if (!allocation_fits(count, sizeof(CK_SLOT_ID))) {
-			EVP_MD_CTX_free(hash);
-			return LIBSSIG_ERROR_MEMORY;
-		}
-		CK_SLOT_ID* ids = calloc(count ? (size_t)count : 1, sizeof(*ids));
-		if (!ids) {
-			EVP_MD_CTX_free(hash);
-			return LIBSSIG_ERROR_MEMORY;
-		}
-		CK_ULONG capacity = count;
-		rv = module->C_GetSlotList(CK_FALSE, ids, &count);
-		ok = ok && EVP_DigestUpdate(hash, &rv, sizeof(rv)) == 1;
-		if (rv == CKR_OK && count <= capacity) {
-			for (CK_ULONG s = 0; ok && s < count; ++s) {
-				CK_SLOT_INFO info = {0};
-				rv = module->C_GetSlotInfo(ids[s], &info);
-				if (rv == CKR_OK && !(options & LIBSSIG_DEVICES_ALL) &&
-				    !(info.flags & CKF_HW_SLOT)) {
-					continue;
-				}
-				ok = EVP_DigestUpdate(hash, &ids[s], sizeof(ids[s])) == 1 &&
-				     EVP_DigestUpdate(hash, &rv, sizeof(rv)) == 1;
-				if (rv != CKR_OK) {
-					continue;
-				}
-				ok = ok &&
-				     EVP_DigestUpdate(
-				         hash,
-				         info.slotDescription,
-				         sizeof(info.slotDescription)
-				     ) == 1 &&
-				     EVP_DigestUpdate(hash, &info.flags, sizeof(info.flags)) ==
-				         1;
-				if (!(info.flags & CKF_TOKEN_PRESENT)) {
-					continue;
-				}
-				CK_TOKEN_INFO token = {0};
-				rv = module->C_GetTokenInfo(ids[s], &token);
-				ok = ok && EVP_DigestUpdate(hash, &rv, sizeof(rv)) == 1;
-				if (rv != CKR_OK) {
-					continue;
-				}
-				/* Exclude session counters, free memory and clocks: signing
-				 * should not itself look like replacement of the hardware. */
-				ok = ok &&
-				     EVP_DigestUpdate(hash, token.label, sizeof(token.label)) ==
-				         1 &&
-				     EVP_DigestUpdate(
-				         hash,
-				         token.manufacturerID,
-				         sizeof(token.manufacturerID)
-				     ) == 1 &&
-				     EVP_DigestUpdate(hash, token.model, sizeof(token.model)) ==
-				         1 &&
-				     EVP_DigestUpdate(
-				         hash,
-				         token.serialNumber,
-				         sizeof(token.serialNumber)
-				     ) == 1 &&
-				     EVP_DigestUpdate(
-				         hash,
-				         &token.flags,
-				         sizeof(token.flags)
-				     ) == 1;
+		     EVP_DigestUpdate(hash, &count, sizeof(count)) == 1;
+		for (CK_ULONG s = 0; ok && s < count; ++s) {
+			CK_SLOT_INFO info = {0};
+			rv = module->C_GetSlotInfo(ids[s], &info);
+			if (rv != CKR_OK) {
+				slots_ok = false;
+				break;
 			}
-		} else if (rv == CKR_BUFFER_TOO_SMALL || count > capacity) {
-			event = true;
+			if (!(options & LIBSSIG_DEVICES_ALL) &&
+			    !(info.flags & CKF_HW_SLOT)) {
+				continue;
+			}
+			ok = EVP_DigestUpdate(hash, &ids[s], sizeof(ids[s])) == 1 &&
+			     EVP_DigestUpdate(
+			         hash,
+			         info.slotDescription,
+			         sizeof(info.slotDescription)
+			     ) == 1 &&
+			     EVP_DigestUpdate(hash, &info.flags, sizeof(info.flags)) == 1;
+			if (!(info.flags & CKF_TOKEN_PRESENT)) {
+				continue;
+			}
+			if (present_count == present_capacity) {
+				size_t capacity = present_capacity ? present_capacity * 2 : 8;
+				if (capacity < present_capacity ||
+				    capacity > SIZE_MAX / sizeof(*present)) {
+					ok = false;
+					break;
+				}
+				slot_reference* grown = realloc(
+				    present,
+				    capacity * sizeof(*present)
+				);
+				if (!grown) {
+					free(present);
+					free(ids);
+					EVP_MD_CTX_free(hash);
+					return LIBSSIG_ERROR_MEMORY;
+				}
+				present = grown;
+				present_capacity = capacity;
+			}
+			present[present_count++] = (slot_reference){m, ids[s]};
 		}
 		free(ids);
 	}
-	unsigned char fingerprint[32];
-	unsigned int  length;
-	ok = ok && EVP_DigestFinal_ex(hash, fingerprint, &length) == 1 &&
-	     length == sizeof(fingerprint);
+	unsigned char slot_fingerprint[32];
+	unsigned int  length = 0;
+	if (!slots_ok) {
+		free(present);
+		EVP_MD_CTX_free(hash);
+		*changed = event;
+		return LIBSSIG_OK;
+	}
+	ok = ok && EVP_DigestFinal_ex(hash, slot_fingerprint, &length) == 1 &&
+	     length == sizeof(slot_fingerprint);
 	EVP_MD_CTX_free(hash);
 	if (!ok) {
+		free(present);
 		return LIBSSIG_ERROR_CRYPTO;
 	}
-	*changed = event || !state->initialized ||
-	           memcmp(state->fingerprint, fingerprint, sizeof(fingerprint)) !=
-	               0;
-	memcpy(state->fingerprint, fingerprint, sizeof(fingerprint));
+	bool slot_changed = !state->initialized || memcmp(
+	                                               state->slot_fingerprint,
+	                                               slot_fingerprint,
+	                                               sizeof(slot_fingerprint)
+	                                           ) != 0;
+	bool refresh = !state->initialized || event || slot_changed ||
+	               state->polls >= LIBSSIG_DEVICES_TOKEN_POLLS;
+	bool          token_ok = false;
+	unsigned char token_fingerprint[32] = {0};
+	if (refresh) {
+		EVP_MD_CTX* token_hash = EVP_MD_CTX_new();
+		if (!token_hash) {
+			free(present);
+			return LIBSSIG_ERROR_MEMORY;
+		}
+		token_ok = EVP_DigestInit_ex(token_hash, EVP_sha256(), NULL) == 1;
+		for (size_t n = 0; token_ok && n < present_count; ++n) {
+			CK_TOKEN_INFO token = {0};
+			CK_RV rv = ctx->impl->modules[present[n].module]->C_GetTokenInfo(
+			    present[n].id,
+			    &token
+			);
+			if (rv != CKR_OK) {
+				token_ok = false;
+				break;
+			}
+			/* Exclude session counters, free memory, clocks and volatile PIN
+			 * flags: using the token must not look like replacement. */
+			token_ok = EVP_DigestUpdate(
+			               token_hash,
+			               &present[n].module,
+			               sizeof(present[n].module)
+			           ) == 1 &&
+			           EVP_DigestUpdate(
+			               token_hash,
+			               &present[n].id,
+			               sizeof(present[n].id)
+			           ) == 1 &&
+			           EVP_DigestUpdate(
+			               token_hash,
+			               token.label,
+			               sizeof(token.label)
+			           ) == 1 &&
+			           EVP_DigestUpdate(
+			               token_hash,
+			               token.manufacturerID,
+			               sizeof(token.manufacturerID)
+			           ) == 1 &&
+			           EVP_DigestUpdate(
+			               token_hash,
+			               token.model,
+			               sizeof(token.model)
+			           ) == 1 &&
+			           EVP_DigestUpdate(
+			               token_hash,
+			               token.serialNumber,
+			               sizeof(token.serialNumber)
+			           ) == 1;
+		}
+		length = 0;
+		token_ok = token_ok &&
+		           EVP_DigestFinal_ex(token_hash, token_fingerprint, &length) ==
+		               1 &&
+		           length == sizeof(token_fingerprint);
+		EVP_MD_CTX_free(token_hash);
+	}
+	free(present);
+	bool token_changed = token_ok && memcmp(
+	                                     state->token_fingerprint,
+	                                     token_fingerprint,
+	                                     sizeof(token_fingerprint)
+	                                 ) != 0;
+	*changed = event || slot_changed || token_changed;
+	memcpy(state->slot_fingerprint, slot_fingerprint, sizeof(slot_fingerprint));
+	if (token_ok) {
+		memcpy(
+		    state->token_fingerprint,
+		    token_fingerprint,
+		    sizeof(token_fingerprint)
+		);
+		state->polls = 0;
+	} else if (refresh) {
+		/* Keep the previous identity and retry on the next poll. */
+		state->polls = LIBSSIG_DEVICES_TOKEN_POLLS;
+	} else if (state->polls < UINT_MAX) {
+		++state->polls;
+	}
 	state->initialized = true;
 	return LIBSSIG_OK;
 }

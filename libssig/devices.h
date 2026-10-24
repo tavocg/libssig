@@ -62,12 +62,16 @@ libssig_status libssig_devices(
 );
 void libssig_devices_free(libssig_device_list* devices);
 
-/* Cheap, nonblocking polling state. Initialize with {0}; the first poll reports
- * changed. Detects module/slot/token metadata changes and optional slot events,
- * including replacement by a card with the same label. Does not open sessions.
- * Use one state per context; do not poll one state concurrently. */
+/* Slot events and slot metadata are checked on every poll. Token identity is
+ * read only on the first poll, after an event or slot change, and at most
+ * every LIBSSIG_DEVICES_TOKEN_POLLS polls. Volatile token flags and transient
+ * provider errors do not report a change. Does not open sessions. Use one
+ * state per context; do not poll one state concurrently. */
+#define LIBSSIG_DEVICES_TOKEN_POLLS 5
 typedef struct {
-	unsigned char fingerprint[32];
+	unsigned char slot_fingerprint[32];
+	unsigned char token_fingerprint[32];
+	unsigned      polls;
 	bool          initialized;
 } libssig_device_state;
 libssig_status libssig_devices_changed(

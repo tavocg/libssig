@@ -34,13 +34,20 @@ or usability of a private key. Certificate metadata does not imply trust.
 
 Use `libssig_devices_changed()` with a zero-initialized `libssig_device_state`
 to poll without opening sessions or reading certificate objects. The first poll
-reports a change. Subsequent calls compare slot presence and token identity,
-and consume optional `C_WaitForSlotEvent(CKF_DONT_BLOCK)` notifications. Poll
-with the same context and options, or reset the state when either changes.
-Session counts, free memory and clocks do not trigger a reload. Events permit
+reports a change. Every poll checks slot presence and slot metadata and consumes
+optional `C_WaitForSlotEvent(CKF_DONT_BLOCK)` notifications. Token identity
+(label, manufacturer, model and serial number) is read only after the first
+poll, after an event or slot change, and at most every
+`LIBSSIG_DEVICES_TOKEN_POLLS` polls. A serial-only replacement is therefore
+detected within that many polls, while card removal and insertion are immediate.
+
+Volatile token fields such as flags, session counters, free memory and clocks
+are excluded. Transient provider errors keep the previous fingerprints and do
+not report a change; the next poll retries the identity read. Poll with the same
+context and options, or reset the state when either changes. Events permit
 detection of reinserting an otherwise identical card when supported by the
-provider; metadata polling remains available when event support is absent.
-The caller chooses the interval and synchronizes context closure/replacement.
+provider; metadata polling remains available when event support is absent. The
+caller chooses the interval and synchronizes context closure/replacement.
 
 PKCS#11 slot descriptions often identify a USB reader, but the API cannot
 discover USB devices without a working provider or guarantee a physical USB

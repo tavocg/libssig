@@ -17,6 +17,20 @@ static void phase(const char* path, char value) {
 	CHECK(fputc(value, file) != EOF);
 	CHECK(fclose(file) == 0);
 }
+static unsigned count_events(const char* path, const char* event) {
+	FILE* file = fopen(path, "r");
+	CHECK(file);
+	unsigned count = 0;
+	size_t   length = strlen(event);
+	char     line[128];
+	while (fgets(line, sizeof(line), file)) {
+		if (!strncmp(line, event, length) && line[length] == '\n') {
+			++count;
+		}
+	}
+	CHECK(fclose(file) == 0);
+	return count;
+}
 int main(int argc, char** argv) {
 	CHECK(argc == 4);
 	phase(argv[2], '0');
@@ -75,22 +89,89 @@ int main(int argc, char** argv) {
 	libssig_devices_free(&devices);
 	libssig_device_state state = {0};
 	bool                 changed = false;
+	unsigned             token_reads = count_events(argv[3], "token-info");
 	CHECK(
 	    libssig_devices_changed(&context, &state, &changed, 0) == LIBSSIG_OK &&
 	    changed
 	);
+	CHECK(count_events(argv[3], "token-info") == token_reads + 2);
+	/* A changed token serial is only observed on the periodic identity read. */
+	phase(argv[2], '2');
+	token_reads = count_events(argv[3], "token-info");
+	for (unsigned n = 0; n < LIBSSIG_DEVICES_TOKEN_POLLS; ++n) {
+		CHECK(
+		    libssig_devices_changed(&context, &state, &changed, 0) ==
+		        LIBSSIG_OK &&
+		    !changed
+		);
+	}
+	CHECK(count_events(argv[3], "token-info") == token_reads);
+	CHECK(
+	    libssig_devices_changed(&context, &state, &changed, 0) == LIBSSIG_OK &&
+	    changed
+	);
+	CHECK(count_events(argv[3], "token-info") == token_reads + 2);
+	CHECK(libssig_devices(&context, &devices, 0) == LIBSSIG_OK);
+	CHECK(strcmp(devices.items[0].slots[0].token.serial, "card-two") == 0);
+	libssig_devices_free(&devices);
+	/* Volatile token flags are ignored, including on a periodic identity read.
+	 */
+	phase(argv[2], '0');
+	state = (libssig_device_state){0};
+	CHECK(
+	    libssig_devices_changed(&context, &state, &changed, 0) == LIBSSIG_OK &&
+	    changed
+	);
+	phase(argv[2], '4');
+	token_reads = count_events(argv[3], "token-info");
+	for (unsigned n = 0; n < LIBSSIG_DEVICES_TOKEN_POLLS; ++n) {
+		CHECK(
+		    libssig_devices_changed(&context, &state, &changed, 0) ==
+		        LIBSSIG_OK &&
+		    !changed
+		);
+	}
 	CHECK(
 	    libssig_devices_changed(&context, &state, &changed, 0) == LIBSSIG_OK &&
 	    !changed
 	);
-	phase(argv[2], '2');
+	CHECK(count_events(argv[3], "token-info") == token_reads + 2);
+	/* A transient token error keeps the previous identity and is not a change.
+	 */
+	phase(argv[2], '5');
+	token_reads = count_events(argv[3], "token-info");
+	for (unsigned n = 0; n < LIBSSIG_DEVICES_TOKEN_POLLS; ++n) {
+		CHECK(
+		    libssig_devices_changed(&context, &state, &changed, 0) ==
+		        LIBSSIG_OK &&
+		    !changed
+		);
+	}
 	CHECK(
 	    libssig_devices_changed(&context, &state, &changed, 0) == LIBSSIG_OK &&
-	    changed
+	    !changed
 	);
-	CHECK(libssig_devices(&context, &devices, 0) == LIBSSIG_OK);
-	CHECK(strcmp(devices.items[0].slots[0].token.serial, "card-two") == 0);
-	libssig_devices_free(&devices);
+	CHECK(count_events(argv[3], "token-info") == token_reads + 1);
+	phase(argv[2], '0');
+	token_reads = count_events(argv[3], "token-info");
+	CHECK(
+	    libssig_devices_changed(&context, &state, &changed, 0) == LIBSSIG_OK &&
+	    !changed
+	);
+	CHECK(count_events(argv[3], "token-info") == token_reads + 2);
+	/* A transient slot error also leaves the stored fingerprints intact. */
+	phase(argv[2], '6');
+	CHECK(
+	    libssig_devices_changed(&context, &state, &changed, 0) == LIBSSIG_OK &&
+	    !changed
+	);
+	phase(argv[2], '0');
+	CHECK(
+	    libssig_devices_changed(&context, &state, &changed, 0) == LIBSSIG_OK &&
+	    !changed
+	);
+	/* Removing the card changes slot presence without an identity read delay.
+	 */
 	phase(argv[2], '1');
 	CHECK(
 	    libssig_devices_changed(&context, &state, &changed, 0) == LIBSSIG_OK &&

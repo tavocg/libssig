@@ -116,6 +116,9 @@ static CK_RV slots(CK_BBOOL present, CK_SLOT_ID_PTR out, CK_ULONG_PTR count) {
 	return CKR_OK;
 }
 static CK_RV slot_info(CK_SLOT_ID id, CK_SLOT_INFO_PTR out) {
+	if (id == 1 && phase() == '6') {
+		return CKR_DEVICE_ERROR;
+	}
 	memset(out, 0, sizeof(*out));
 	out->flags = id == 4 ? 0 : CKF_HW_SLOT | CKF_REMOVABLE_DEVICE;
 	if (id != 2 && !(id == 1 && phase() == '1')) {
@@ -136,8 +139,13 @@ static CK_RV slot_info(CK_SLOT_ID id, CK_SLOT_INFO_PTR out) {
 	return CKR_OK;
 }
 static CK_RV token_info(CK_SLOT_ID id, CK_TOKEN_INFO_PTR out) {
-	if (id == 1 && phase() == '1') {
+	trace("token-info");
+	char current = phase();
+	if (id == 1 && current == '1') {
 		return CKR_TOKEN_NOT_PRESENT;
+	}
+	if (id == 1 && current == '5') {
+		return CKR_DEVICE_ERROR;
 	}
 	memset(out, 0, sizeof(*out));
 	padded(
@@ -154,10 +162,12 @@ static CK_RV token_info(CK_SLOT_ID id, CK_TOKEN_INFO_PTR out) {
 	padded(
 	    out->serialNumber,
 	    sizeof(out->serialNumber),
-	    phase() == '2' ? "card-two" : "card-one"
+	    current == '2' ? "card-two" : "card-one"
 	);
-	out->flags = CKF_TOKEN_INITIALIZED | CKF_LOGIN_REQUIRED |
-	             CKF_USER_PIN_FINAL_TRY;
+	out->flags = current == '4' ? CKF_TOKEN_INITIALIZED | CKF_LOGIN_REQUIRED |
+	                                  CKF_USER_PIN_COUNT_LOW
+	                            : CKF_TOKEN_INITIALIZED | CKF_LOGIN_REQUIRED |
+	                                  CKF_USER_PIN_FINAL_TRY;
 	out->ulMinPinLen = 4;
 	out->ulMaxPinLen = 12;
 	out->ulTotalPublicMemory = 8192;
