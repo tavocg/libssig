@@ -7,7 +7,7 @@
 
 cmake_minimum_required(VERSION 3.16)
 
-project(libssig VERSION 0.2.0 LANGUAGES C)
+project(libssig VERSION 0.2.1 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -125,7 +125,7 @@ if(LIBSSIG_INSTALL)
     )
 
     install(FILES libssig/libssig.h libssig/types.h libssig/version.h
-        libssig/context.h libssig/devices.h libssig/tokens.h libssig/trust_store.h
+        libssig/context.h libssig/provider.h libssig/devices.h libssig/tokens.h libssig/trust_store.h
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libssig
     )
 

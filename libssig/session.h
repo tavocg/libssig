@@ -7,6 +7,8 @@
 
 struct libssig_context_impl {
 	CK_FUNCTION_LIST** modules;
+	CK_FUNCTION_LIST** managed_modules;
+	size_t             managed_count;
 	bool               explicit_modules;
 };
 

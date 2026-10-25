@@ -1,11 +1,16 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include <libssig/context.h>
+#include <libssig/provider.h>
 #include <libssig/session.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
 static void context_free(struct libssig_context_impl* impl) {
+	if (impl->managed_modules) {
+		free(impl->modules);
+		impl->modules = impl->managed_modules;
+	}
 	if (impl->explicit_modules) {
 		if (impl->modules) {
 			for (size_t i = 0; impl->modules[i]; ++i) {
@@ -82,6 +87,43 @@ libssig_status libssig_context_open_modules(
 
 libssig_status libssig_context_open(libssig_context* ctx) {
 	return libssig_context_open_modules(ctx, NULL);
+}
+
+libssig_status libssig_context_add_provider(
+    libssig_context*  ctx,
+    CK_FUNCTION_LIST* provider
+) {
+	if (!ctx || !ctx->impl || !provider || !provider->C_GetInfo ||
+	    !provider->C_GetSlotList) {
+		return LIBSSIG_ERROR_ARGUMENT;
+	}
+	struct libssig_context_impl* impl = ctx->impl;
+	size_t                       count = 0;
+	while (impl->modules && impl->modules[count]) {
+		if (impl->modules[count] == provider) {
+			return LIBSSIG_OK;
+		}
+		++count;
+	}
+	if (count > SIZE_MAX / sizeof(*impl->modules) - 2) {
+		return LIBSSIG_ERROR_MEMORY;
+	}
+	CK_FUNCTION_LIST** combined = calloc(count + 2, sizeof(*combined));
+	if (!combined) {
+		return LIBSSIG_ERROR_MEMORY;
+	}
+	if (count) {
+		memcpy(combined, impl->modules, count * sizeof(*combined));
+	}
+	combined[count] = provider;
+	if (!impl->managed_modules) {
+		impl->managed_modules = impl->modules;
+		impl->managed_count = count;
+	} else {
+		free(impl->modules);
+	}
+	impl->modules = combined;
+	return LIBSSIG_OK;
 }
 
 void libssig_context_close(libssig_context* ctx) {

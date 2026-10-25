@@ -358,7 +358,8 @@ static libssig_status read_slot(
 static libssig_status read_module(
     CK_FUNCTION_LIST*      module,
     libssig_device_module* result,
-    unsigned int           options
+    unsigned int           options,
+    bool                   managed
 ) {
 	CK_INFO info = {0};
 	result->ck_rv = module->C_GetInfo(&info);
@@ -373,8 +374,10 @@ static libssig_status read_module(
 	    info.manufacturerID,
 	    sizeof(info.manufacturerID)
 	);
-	result->name = p11_kit_module_get_name(module);
-	result->path = p11_kit_module_get_filename(module);
+	if (managed) {
+		result->name = p11_kit_module_get_name(module);
+		result->path = p11_kit_module_get_filename(module);
+	}
 	if (!result->name) {
 		result->name = text_copy(
 		    info.libraryDescription,
@@ -476,7 +479,8 @@ libssig_status libssig_devices(
 		devices->items[n].status = read_module(
 		    ctx->impl->modules[n],
 		    &devices->items[n],
-		    options
+		    options,
+		    !ctx->impl->managed_modules || n < ctx->impl->managed_count
 		);
 		if (devices->items[n].status == LIBSSIG_ERROR_MEMORY) {
 			libssig_devices_free(devices);

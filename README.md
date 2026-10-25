@@ -45,6 +45,15 @@ are loaded once. Paths are borrowed only during open and use p11-kit's filename
 encoding and resolution rules. Callers should supply absolute paths to avoid
 platform-dependent relative lookup. Close contexts after freeing their sessions.
 
+Applications embedding a PKCS#11 implementation can include
+`<libssig/provider.h>` and call `libssig_context_add_provider(&ctx, functions)`
+after opening the context (API added in 0.2.1). This appends the provider while
+preserving p11-kit discovery or the explicit module list. The application owns
+the initialized function table and must keep it initialized until all borrowing
+contexts and sessions close. libssig never initializes, finalizes or unloads
+borrowed providers. Duplicate table pointers are ignored. This optional header
+requires the PKCS#11 headers from p11-kit (`pkg-config --cflags p11-kit-1`).
+
 Get the loaded library version (each output pointer may be `NULL`):
 
 ```c

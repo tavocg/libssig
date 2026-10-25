@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #include <libssig/context.h>
+#include <libssig/provider.h>
+#include <libssig/session.h>
 #include <p11-kit/p11-kit.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -55,6 +57,20 @@ static void reset(void) {
 	fail_load = NULL;
 	fail_init = false;
 }
+static CK_RV provider_info(CK_INFO_PTR info) {
+	(void)info;
+	return CKR_OK;
+}
+static CK_RV provider_slots(
+    CK_BBOOL       present,
+    CK_SLOT_ID_PTR slots,
+    CK_ULONG_PTR   count
+) {
+	(void)present;
+	(void)slots;
+	*count = 0;
+	return CKR_OK;
+}
 int main(void) {
 	libssig_context     ctx = {0};
 	const char*         names[] = {"first", "second", "first"};
@@ -87,9 +103,36 @@ int main(void) {
 	libssig_context_close(&ctx);
 	CHECK(discovers == 2 && closes == 2);
 
+	CK_FUNCTION_LIST builtin = {
+	    .C_GetInfo = provider_info,
+	    .C_GetSlotList = provider_slots
+	};
+	CHECK(
+	    libssig_context_add_provider(&ctx, &builtin) == LIBSSIG_ERROR_ARGUMENT
+	);
+	CHECK(libssig_context_open(&ctx) == LIBSSIG_OK);
+	CHECK(libssig_context_add_provider(&ctx, NULL) == LIBSSIG_ERROR_ARGUMENT);
+	CHECK(libssig_context_add_provider(&ctx, &builtin) == LIBSSIG_OK);
+	CHECK(ctx.impl->modules[0] == &modules[0]);
+	CHECK(ctx.impl->modules[1] == &builtin && !ctx.impl->modules[2]);
+	CHECK(libssig_context_add_provider(&ctx, &builtin) == LIBSSIG_OK);
+	CHECK(!ctx.impl->modules[2]);
+	CK_FUNCTION_LIST extra = builtin;
+	CHECK(libssig_context_add_provider(&ctx, &extra) == LIBSSIG_OK);
+	CHECK(ctx.impl->modules[2] == &extra && !ctx.impl->modules[3]);
+	libssig_context another = {0};
+	CHECK(libssig_context_open(&another) == LIBSSIG_OK);
+	CHECK(libssig_context_add_provider(&another, &builtin) == LIBSSIG_OK);
+	libssig_context_close(&ctx);
+	CHECK(another.impl->modules[1] == &builtin);
+	libssig_context_close(&another);
+	CHECK(closes == 4 && !finalizes && !releases);
+
 	reset();
 	CHECK(libssig_context_open_modules(&ctx, &paths) == LIBSSIG_OK);
 	CHECK(loads == 2 && initializes == 2 && !discovers);
+	CHECK(libssig_context_add_provider(&ctx, &builtin) == LIBSSIG_OK);
+	CHECK(ctx.impl->modules[2] == &builtin);
 	libssig_context_close(&ctx);
 	libssig_context_close(&ctx);
 	libssig_context_close(NULL);
