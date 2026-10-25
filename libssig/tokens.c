@@ -56,7 +56,9 @@ static libssig_status token_flags_names(
 	    {CKF_SO_PIN_FINAL_TRY, "so-pin-final-try"},
 	    {CKF_SO_PIN_LOCKED, "so-pin-locked"},
 	    {CKF_SO_PIN_TO_BE_CHANGED, "so-pin-to-be-changed"},
+#ifdef CKF_ERROR_STATE
 	    {CKF_ERROR_STATE, "error-state"},
+#endif
 	};
 	size_t count = 0;
 	for (size_t i = 0; i < sizeof(flag_names) / sizeof(flag_names[0]); ++i) {
