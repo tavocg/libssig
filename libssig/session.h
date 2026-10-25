@@ -10,6 +10,9 @@ struct libssig_context_impl {
 	bool               explicit_modules;
 };
 
+/* Opt-in diagnostics: static operation names and return codes only. */
+void libssig_pkcs11_trace(const char* operation, CK_RV rv);
+
 /* El contexto debe permanecer abierto mientras existan sesiones. */
 typedef struct {
 	CK_FUNCTION_LIST* module;

@@ -3,7 +3,21 @@
 #include <limits.h>
 #include <p11-kit/uri.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+
+void libssig_pkcs11_trace(const char* operation, CK_RV rv) {
+	const char* enabled = getenv("LIBSSIG_PKCS11_TRACE");
+	if (enabled && !strcmp(enabled, "1")) {
+		fprintf(
+		    stderr,
+		    "libssig-pkcs11: operation=%s CK_RV=0x%lx\n",
+		    operation,
+		    (unsigned long)rv
+		);
+	}
+}
 
 static libssig_status slot_match(
     CK_FUNCTION_LIST* module,
@@ -53,7 +67,8 @@ static libssig_status module_token_find(
 	}
 
 	size_t count = (size_t)slot_count;
-	if ((CK_ULONG)count != slot_count || count > SIZE_MAX / sizeof(CK_SLOT_ID)) {
+	if ((CK_ULONG)count != slot_count ||
+	    count > SIZE_MAX / sizeof(CK_SLOT_ID)) {
 		return LIBSSIG_ERROR_MEMORY;
 	}
 
@@ -137,6 +152,7 @@ libssig_status libssig_session_open(
 	    NULL,
 	    &pending.handle
 	);
+	libssig_pkcs11_trace("C_OpenSession", *out_rv);
 	if (*out_rv != CKR_OK) {
 		return LIBSSIG_ERROR_PKCS11;
 	}
@@ -164,11 +180,13 @@ libssig_status libssig_session_login(
 
 	CK_TOKEN_INFO token_info;
 	*out_rv = s->module->C_GetTokenInfo(s->slot, &token_info);
+	libssig_pkcs11_trace("C_GetTokenInfo(login)", *out_rv);
 	if (*out_rv != CKR_OK) {
 		return LIBSSIG_ERROR_PKCS11;
 	}
 
 	if (!(token_info.flags & CKF_LOGIN_REQUIRED)) {
+		libssig_pkcs11_trace("C_Login(skip:not-required)", CKR_OK);
 		return LIBSSIG_OK;
 	}
 
@@ -182,6 +200,7 @@ libssig_status libssig_session_login(
 	    (CK_UTF8CHAR_PTR)pin,
 	    (CK_ULONG)pin_len
 	);
+	libssig_pkcs11_trace("C_Login(CKU_USER)", *out_rv);
 	if (*out_rv == CKR_OK || *out_rv == CKR_USER_ALREADY_LOGGED_IN) {
 		return LIBSSIG_OK;
 	}
@@ -194,6 +213,7 @@ CK_RV libssig_session_close(libssig_session* s) {
 	}
 
 	CK_RV rv = s->module->C_CloseSession(s->handle);
+	libssig_pkcs11_trace("C_CloseSession", rv);
 	*s = (libssig_session){0};
 	return rv;
 }

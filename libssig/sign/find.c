@@ -12,6 +12,7 @@ static libssig_status key_unique_find(
 		CK_OBJECT_HANDLE object = CK_INVALID_HANDLE;
 		CK_ULONG         count = 0;
 		*out_rv = s->module->C_FindObjects(s->handle, &object, 1, &count);
+		libssig_pkcs11_trace("C_FindObjects(private-key)", *out_rv);
 		if (*out_rv != CKR_OK) {
 			return LIBSSIG_ERROR_PKCS11;
 		}
@@ -47,6 +48,7 @@ static libssig_status key_capabilities_check(
 	    {CKA_SIGN, &can_sign, sizeof(can_sign)},
 	};
 	*out_rv = s->module->C_GetAttributeValue(s->handle, key, capabilities, 2);
+	libssig_pkcs11_trace("C_GetAttributeValue(key-capabilities)", *out_rv);
 	if (*out_rv != CKR_OK) {
 		return LIBSSIG_ERROR_PKCS11;
 	}
@@ -84,6 +86,7 @@ libssig_status libssig_private_key_find(
         {CKA_ID, (void*)id, (CK_ULONG)id_len},
     };
 	*out_rv = s->module->C_FindObjectsInit(s->handle, attributes, 2);
+	libssig_pkcs11_trace("C_FindObjectsInit(private-key)", *out_rv);
 	if (*out_rv != CKR_OK) {
 		return LIBSSIG_ERROR_PKCS11;
 	}
@@ -91,6 +94,7 @@ libssig_status libssig_private_key_find(
 	CK_OBJECT_HANDLE key = CK_INVALID_HANDLE;
 	libssig_status   status = key_unique_find(s, &key, out_rv);
 	CK_RV            final_rv = s->module->C_FindObjectsFinal(s->handle);
+	libssig_pkcs11_trace("C_FindObjectsFinal(private-key)", final_rv);
 	if (status == LIBSSIG_OK && final_rv != CKR_OK) {
 		*out_rv = final_rv;
 		status = LIBSSIG_ERROR_PKCS11;

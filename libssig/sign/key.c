@@ -99,6 +99,10 @@ static libssig_status key_authentication_get(
 
 	*out_required = CK_FALSE;
 	*out_rv = s->module->C_GetAttributeValue(s->handle, key, &attribute, 1);
+	libssig_pkcs11_trace(
+	    "C_GetAttributeValue(CKA_ALWAYS_AUTHENTICATE)",
+	    *out_rv
+	);
 	if (*out_rv == CKR_ATTRIBUTE_TYPE_INVALID) {
 		*out_required = CK_FALSE;
 		*out_rv = CKR_OK;
@@ -129,7 +133,13 @@ static libssig_status sign_operation_init(
 		return status;
 	}
 
+	libssig_pkcs11_trace(
+	    required == CK_TRUE ? "CKA_ALWAYS_AUTHENTICATE(true)"
+	                        : "CKA_ALWAYS_AUTHENTICATE(false)",
+	    CKR_OK
+	);
 	*out_rv = s->module->C_SignInit(s->handle, &plan->mechanism, key);
+	libssig_pkcs11_trace("C_SignInit", *out_rv);
 	if (*out_rv != CKR_OK) {
 		return LIBSSIG_ERROR_PKCS11;
 	}
@@ -141,6 +151,7 @@ static libssig_status sign_operation_init(
 		    (CK_UTF8CHAR_PTR)params->pin,
 		    (CK_ULONG)params->pin_len
 		);
+		libssig_pkcs11_trace("C_Login(CKU_CONTEXT_SPECIFIC)", *out_rv);
 	}
 
 	return *out_rv == CKR_OK ? LIBSSIG_OK : LIBSSIG_ERROR_PKCS11;
@@ -161,6 +172,7 @@ static libssig_status signature_allocate(
 	    NULL,
 	    out_capacity
 	);
+	libssig_pkcs11_trace("C_Sign(length)", signature->ck_rv);
 	if (signature->ck_rv != CKR_OK) {
 		return LIBSSIG_ERROR_PKCS11;
 	}
@@ -203,6 +215,7 @@ static libssig_status signature_read(
 	    &len
 	);
 
+	libssig_pkcs11_trace("C_Sign(output)", signature->ck_rv);
 	if (signature->ck_rv != CKR_OK) {
 		return LIBSSIG_ERROR_PKCS11;
 	}

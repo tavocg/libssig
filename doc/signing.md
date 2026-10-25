@@ -125,3 +125,12 @@ These structures follow [RFC 5652 §5](https://www.rfc-editor.org/rfc/rfc5652#se
 [RFC 7515 §7.2](https://www.rfc-editor.org/rfc/rfc7515#section-7.2),
 [XMLDSig 1.1](https://www.w3.org/TR/xmldsig-core/) and
 [ETSI EN 319 142-1](https://www.etsi.org/deliver/etsi_en/319100_319199/31914201/01.02.01_60/en_31914201v010201p.pdf).
+
+## PKCS#11 diagnostics
+
+Set `LIBSSIG_PKCS11_TRACE=1` to emit static operation names and return codes on
+stderr for session open/close, user/context login, private-key search,
+`CKA_ALWAYS_AUTHENTICATE`, `C_SignInit`, and the length/output calls to `C_Sign`.
+No PIN, key/token identifier, session handle, document data or signature bytes
+are logged. This is opt-in; ordinary operation is silent. It does not retry
+login or signing, or change authentication policy.
